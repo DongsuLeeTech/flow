@@ -93,8 +93,8 @@ class DLCIAccelEnv(AccelEnv):
                     return 0.
 
             if simple_lc_p and self.time_counter == self.k.vehicle.get_last_lc(rl):
-                reward += simple_lc_p
-                rwds['simple_lc_penalty'] += simple_lc_p
+                reward -= simple_lc_p
+                rwds['simple_lc_penalty'] -= simple_lc_p
 
             follower = self.k.vehicle.get_follower(rl)
             leader = self.k.vehicle.get_leader(rl)
@@ -148,7 +148,6 @@ class DLCIAccelEnv(AccelEnv):
                 pprint(dict(reward))
                 print('=== accumulated reward ===')
                 pprint(dict(self.accumulated_reward))
-
         return rwd
 
     def get_state(self):
@@ -174,9 +173,9 @@ class DLCIAccelEnv(AccelEnv):
         if rl_action is None:
             return rl_action
         for i in range(1, len(rl_action), 2):
-            if rl_action[i] < -0.9:
+            if rl_action[i] <= -0.333:
                 rl_action[i] = -1
-            elif rl_action[i] >= 0.9:
+            elif rl_action[i] >= 0.333:
                 rl_action[i] = 1
             else:
                 rl_action[i] = 0
@@ -241,7 +240,9 @@ class DLCIAccelPOEnv(DLCIAccelEnv):
             low=0,
             high=1,
             shape=(2 * self.initial_vehicles.num_rl_vehicles *
-                   (self.num_lanes + 5) + 2,),
+                   (self.num_lanes + 5),),
+            # shape=(2 * self.initial_vehicles.num_rl_vehicles *
+            #        (self.num_lanes + 5) + 2,),
             dtype=np.float32)
 
     def get_state(self):
@@ -253,9 +254,9 @@ class DLCIAccelPOEnv(DLCIAccelEnv):
             self.k.network.num_lanes(edge)
             for edge in self.k.network.get_edge_list())
 
-        # coef
-        rl_des = self.initial_config.reward_params.get('rl_desired_speed', 0)
-        uns4IDM_p = self.initial_config.reward_params.get('uns4IDM_penalty', 0)
+        # # coef
+        # rl_des = self.initial_config.reward_params.get('rl_desired_speed', 0)
+        # uns4IDM_p = self.initial_config.reward_params.get('uns4IDM_penalty', 0)
 
         # NOTE: this works for only single agent environmnet
         rl = self.k.vehicle.get_rl_ids()[0]
@@ -286,9 +287,10 @@ class DLCIAccelPOEnv(DLCIAccelEnv):
         lanes = [lane / max_lanes
                  for lane in follower_lanes + leader_lanes + [self.k.vehicle.get_lane(rl)]]
 
-        coef = [rl_des, uns4IDM_p]
+        # coef = [rl_des, uns4IDM_p]
 
-        observation = np.array(speeds + positions + lanes + coef)
+        # observation = np.array(speeds + positions + lanes + coef)
+        observation = np.array(speeds + positions + lanes)
         return observation
 
     def additional_command(self):

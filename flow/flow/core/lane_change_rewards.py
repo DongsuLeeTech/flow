@@ -185,6 +185,7 @@ def simple_lc_penalty(env):
     for veh_id in env.k.vehicle.get_rl_ids():
         if env.k.vehicle.get_last_lc(veh_id) == env.time_counter:
             reward -= sim_lc_penalty
+    print(reward)
     return reward
 
 def follower_decel_penalty(env):
