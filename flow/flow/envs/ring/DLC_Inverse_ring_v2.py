@@ -30,7 +30,7 @@ ADDITIONAL_ENV_PARAMS = {
 }
 
 
-class DLCIAccelEnv(AccelEnv):
+class DLCIAccelEnv2(AccelEnv):
     """Fully observable lane change and acceleration environment.
 
     This environment is used to train autonomous vehicles to improve traffic
@@ -130,12 +130,10 @@ class DLCIAccelEnv(AccelEnv):
                 pen = rewards.rl_action_penalty(self, rl_actions)
                 reward += pen
                 rwds['rl_action_penalty'] += pen
+        # print(rwds)
         rwd = sum(rwds.values())
-        # if rwd < -2:
-        #     print('accumulative reward is negative:{}\nelements of reward:{}'.format(rwd,rwds))
-        #     print(self.get_state())
-        # if rwds['meaningless_penalty'] < 0:
-        #     print('reward:{}, state:{}, time:{}'.format(rwds, self.get_state(),self.time_counter))
+        if rwd < -2:
+            print('accumulative reward is negative:{}\nelements of reward:{}'.format(rwd,rwds))
         rwd = rwd + 5
         # print(rwd)
 
@@ -220,7 +218,7 @@ class DLCIAccelEnv(AccelEnv):
                 self.k.vehicle.set_observed(veh_id)
 
 
-class DLCIAccelPOEnv(DLCIAccelEnv):
+class DLCIAccelPOEnv2(DLCIAccelEnv2):
     """POMDP version of LaneChangeAccelEnv.
 
         Required from env_params:
@@ -243,10 +241,9 @@ class DLCIAccelPOEnv(DLCIAccelEnv):
     def observation_space(self):
         """See class definition."""
         return Box(
-            low=0,
+            low=-1,
             high=1,
-            shape=(2 * self.initial_vehicles.num_rl_vehicles *
-                   (self.num_lanes + 5),),
+            shape=(self.num_lanes * 4 + 2, ),
             # shape=(2 * self.initial_vehicles.num_rl_vehicles *
             #        (self.num_lanes + 5) + 2,),
             dtype=np.float32)
@@ -277,22 +274,26 @@ class DLCIAccelPOEnv(DLCIAccelEnv):
             if i / max_speed > 1:
                 rl_speed = [1.]
 
-        #  Position of Vehicles
+        # Position of Vehicles
         lane_followers_pos = [self.k.vehicle.get_x_by_id(follower) for follower in lane_followers]
         lane_leaders_pos = [self.k.vehicle.get_x_by_id(leader) for leader in lane_leaders]
 
-        #  Lane of Vehicles
-        follower_lanes = [self.k.vehicle.get_lane(follower) for follower in lane_followers]
-        leader_lanes = [self.k.vehicle.get_lane(leader) for leader in lane_leaders]
+        # #  Relative Lane of Vehicles
+        # follower_lanes = [self.k.vehicle.get_lane(follower) for follower in lane_followers]
+        # leader_lanes = [self.k.vehicle.get_lane(leader) for leader in lane_leaders]
 
         #  Normalization of states
         speeds = [speed / max_speed
                   for speed in lane_followers_speed + lane_leaders_speed + rl_speed]
-        positions = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length  # Relative Postion
-                     for pos in lane_followers_pos + lane_leaders_pos]
-        lanes = [lane / max_lanes
-                 for lane in follower_lanes + leader_lanes + [self.k.vehicle.get_lane(rl)]]
 
+        f_pos = [-((self.k.vehicle.get_x_by_id(rl) - pos) % length / length)
+                     for pos in lane_followers_pos]
+        l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
+                     for pos in lane_leaders_pos]
+        positions = f_pos + l_pos
+        lanes = [self.k.vehicle.get_lane(rl) / max_lanes]
+        # lanes = [lane / max_lanes
+        #          for lane in follower_lanes + leader_lanes + [self.k.vehicle.get_lane(rl)]]
 
         # coef = [rl_des, uns4IDM_p]
 

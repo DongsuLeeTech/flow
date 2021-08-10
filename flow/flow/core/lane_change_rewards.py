@@ -76,6 +76,7 @@ def unsafe_distance_penalty4IDM(env):
     v = env.k.vehicle.get_speed(rls)[0]
     # rl_lane = env.k.vehicle.get_lane(rls)
     tw = env.k.vehicle.get_tailway(rls)[0]
+
     follow_id = env.k.vehicle.get_follower(rls)[0]
     # if rl_lane == [0]:
     #     tw = env.k.vehicle.get_tailway(rls)[0]
@@ -96,7 +97,10 @@ def unsafe_distance_penalty4IDM(env):
             0, follow_vel * T + follow_vel * (v - follow_vel) /
             (2 * np.sqrt(a * b)))
 
-    return uns4IDM_p * min(0, 1 - (s_star / tw) ** 2)
+    rwd = uns4IDM_p * max(-5, min(0, 1 - (s_star / tw) ** 2))
+    # if rwd < - 0:
+        # print('rwd:{}, tw:{}\n'.format(rwd, tw))
+    return rwd
 
 def punish_accelerations(env,rl_action):
     acc_p = env.initial_config.reward_params.get('acc_penalty', 0)
@@ -160,20 +164,47 @@ def rl_action_penalty(env, rl_action):
     else:
         return 0
 
+# def meaningless_penalty(env):
+#     mlp = env.initial_config.reward_params.get('meaningless_penalty', 0)
+#     reward = 0
+#     if mlp:
+#         for veh_id in env.k.vehicle.get_rl_ids():
+#             if env.k.vehicle.get_last_lc(veh_id) == env.time_counter:
+#                 lane_leaders = env.k.vehicle.get_lane_leaders(veh_id)
+#                 headway = [env.k.vehicle.get_x_by_id(leader) for leader in lane_leaders]
+#                 lane_headway = (headway[env.k.vehicle.get_lane(veh_id)] -
+#                                 env.k.vehicle.get_x_by_id(veh_id))% env.k.network.length()
+#                 if lane_headway > 15:
+#                     reward -= mlp
+#                 else:
+#                     reward += mlp
+#
+#     return reward
+
 def meaningless_penalty(env):
     mlp = env.initial_config.reward_params.get('meaningless_penalty', 0)
     reward = 0
+
     if mlp:
         for veh_id in env.k.vehicle.get_rl_ids():
+            # print(env.time_counter, env.k.vehicle.get_lane(veh_id))
             if env.k.vehicle.get_last_lc(veh_id) == env.time_counter:
                 lane_leaders = env.k.vehicle.get_lane_leaders(veh_id)
-                headway = [env.k.vehicle.get_x_by_id(leader) for leader in lane_leaders]
-                lane_headway = (headway[env.k.vehicle.get_lane(veh_id)] -
-                                env.k.vehicle.get_x_by_id(veh_id))% env.k.network.length()
-                if lane_headway > 15:
-                    reward -= mlp
-                else:
-                    reward += mlp
+                headway = [(env.k.vehicle.get_x_by_id(leader) - env.k.vehicle.get_x_by_id(veh_id))
+                           % env.k.network.length() / env.k.network.length() for leader in lane_leaders]
+
+                # lane_headway = [(headway[env.k.vehicle.get_lane(0)] -
+                #                 env.k.vehicle.get_x_by_id(veh_id))% env.k.network.length() ,
+                #                 (headway[env.k.vehicle.get_lane(1)] -
+                #                 env.k.vehicle.get_x_by_id(veh_id)) % env.k.network.length()]
+                # print('headway:{},RL_lane:{}, lane_leader:{}'.format(headway, env.k.vehicle.get_lane(veh_id),lane_leaders))
+                if env.k.vehicle.get_lane(veh_id) == 0 and headway[0] < headway[1]:
+                    reward -= mlp * (headway[1])
+                    # print('AT lane0 {},{},{}'.format(headway, reward, env.time_counter))
+                elif env.k.vehicle.get_lane(veh_id) == 1 and headway[1] < headway[0]:
+                    reward -= mlp * (headway[0])
+                    # print('AT lane1 {},{},{}'.format(headway, reward, env.time_counter))
+                # print('time:{}, rl_lane:{}, reward:{}, headway:{}'.format(env.time_counter, env.k.vehicle.get_lane(veh_id), reward, headway))
 
     return reward
 
