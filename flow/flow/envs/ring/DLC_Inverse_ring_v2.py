@@ -132,9 +132,10 @@ class DLCIAccelEnv2(AccelEnv):
                 rwds['rl_action_penalty'] += pen
         # print(rwds)
         rwd = sum(rwds.values())
-        if rwd < -2:
-            print('accumulative reward is negative:{}\nelements of reward:{}'.format(rwd,rwds))
-        rwd = rwd + 5
+        # if rwd :
+        #     print('accumulative reward is negative:{}\nelements of reward:{}'.format(rwd,rwds))
+        #     print(self.get_state())
+        # rwd = rwd + 2
         # print(rwd)
 
         if self.env_params.evaluate:
@@ -291,7 +292,7 @@ class DLCIAccelPOEnv2(DLCIAccelEnv2):
         l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
                      for pos in lane_leaders_pos]
         positions = f_pos + l_pos
-        lanes = [self.k.vehicle.get_lane(rl) / max_lanes]
+        lanes = [self.k.vehicle.get_lane(rl) / (max_lanes - 1)]
         # lanes = [lane / max_lanes
         #          for lane in follower_lanes + leader_lanes + [self.k.vehicle.get_lane(rl)]]
 
