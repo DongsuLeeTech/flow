@@ -173,23 +173,31 @@ class DLCIAccelEnv2(AccelEnv):
 
         return np.array(speed + pos + lane)
 
-    def _to_lc_action(self, rl_action):
-        """Make direction components of rl_action to discrete"""
-        if rl_action is None:
-            return rl_action
-        for i in range(1, len(rl_action), 2):
-            if rl_action[i] <= -0.333:
-                rl_action[i] = -1
-            elif rl_action[i] >= 0.333:
-                rl_action[i] = 1
-            else:
-                rl_action[i] = 0
-        return rl_action
+    # def _to_lc_action(self, rl_action):
+    #     """Make direction components of rl_action to discrete"""
+    #     if rl_action is None:
+    #         return rl_action
+    #     for i in range(1, len(rl_action), 2):
+    #         if rl_action[i] <= -0.333:
+    #             rl_action[i] = -1
+    #         elif rl_action[i] >= 0.333:
+    #             rl_action[i] = 1
+    #         else:
+    #             rl_action[i] = 0
+    #     return rl_action
 
     def _apply_rl_actions(self, actions):
-        actions = self._to_lc_action(actions)
+        # actions = self._to_lc_action(actions)
         acceleration = actions[::2]
         direction = actions[1::2]
+
+        for i in range(len(direction)):
+            if direction[i] <= -0.333:
+                direction[i] = -1
+            elif direction[i] >= 0.333:
+                direction[i] = 1
+            else:
+                direction[i] = 0
 
         self.last_lane = self.k.vehicle.get_lane(self.k.vehicle.get_rl_ids())
 

@@ -262,7 +262,7 @@ class RingNetwork(Network):
         length = net_params.additional_params['length']
         num_lane = net_params.additional_params['lanes']
         min_gap = initial_config.min_gap
-        my_min_gap = min_gap + 20
+        my_min_gap = min_gap + 25
         startpos, startlane = [], []
 
         if length < (num_vehicles / num_lane) * (VEHICLE_LENGTH + my_min_gap) :
@@ -271,6 +271,7 @@ class RingNetwork(Network):
         surplus_gap = length - num_vehicles * (VEHICLE_LENGTH + my_min_gap)
         tmp = list(range(int(num_vehicles // 2 + num_vehicles % 2))) + list(reversed(range(int(num_vehicles // 2))))
         surplus_gap_list = np.array(tmp) / sum(tmp) * surplus_gap
+        avg_gap = np.mean(surplus_gap_list)
 
         edges = ['bottom', 'right', 'top', 'left']
         edge_length = length // 4
@@ -282,8 +283,8 @@ class RingNetwork(Network):
         startlane += [lane_index[i % len(lane_index)] for i in range(num_vehicles - 1)]
 
         pos = 0
-        for veh, gap in zip(range(num_vehicles - 1), surplus_gap_list):
-            pos = pos + my_min_gap + VEHICLE_LENGTH + gap
+        for veh in zip(range(num_vehicles - 1)):
+            pos = pos + my_min_gap + VEHICLE_LENGTH + avg_gap
             startpos.append((edges[int(pos // edge_length)], pos % edge_length))
             # startlane.append((startlane[-1] + 1+int(num_lane>2)) % num_lane)
         else:
