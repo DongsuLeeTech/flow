@@ -91,6 +91,7 @@ class TraCIVehicle(KernelVehicle):
 
         # old speeds used to compute accelerations
         self.previous_speeds = {}
+        self.previous_lane = {}
 
     def initialize(self, vehicles):
         """Initialize vehicle state information.
@@ -143,6 +144,7 @@ class TraCIVehicle(KernelVehicle):
         vehicle_obs = {}
         for veh_id in self.__ids:
             self.previous_speeds[veh_id] = self.get_speed(veh_id)
+            self.previous_lane[veh_id] = self.get_lane(veh_id)
             vehicle_obs[veh_id] = \
                 self.kernel_api.vehicle.getSubscriptionResults(veh_id)
         sim_obs = self.kernel_api.simulation.getSubscriptionResults()
@@ -391,6 +393,7 @@ class TraCIVehicle(KernelVehicle):
     def reset(self):
         """See parent class."""
         self.previous_speeds = {}
+        self.previous_lane = {}
 
     def remove(self, veh_id):
         """See parent class."""
@@ -612,6 +615,12 @@ class TraCIVehicle(KernelVehicle):
         if isinstance(veh_id, (list, np.ndarray)):
             return [self.get_edge(vehID, error) for vehID in veh_id]
         return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_ROAD_ID, error)
+
+    def get_previous_lane(self, veh_id, error=-1001):
+        """See parent class."""
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_previous_lane(vehID, error) for vehID in veh_id]
+        return self.previous_lane.get(veh_id, 0)
 
     def get_lane(self, veh_id, error=-1001):
         """See parent class."""

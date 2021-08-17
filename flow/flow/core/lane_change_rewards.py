@@ -193,19 +193,17 @@ def meaningless_penalty(env):
                 headway = [(env.k.vehicle.get_x_by_id(leader) - env.k.vehicle.get_x_by_id(veh_id))
                            % env.k.network.length() / env.k.network.length() for leader in lane_leaders]
 
-                # lane_headway = [(headway[env.k.vehicle.get_lane(0)] -
-                #                 env.k.vehicle.get_x_by_id(veh_id))% env.k.network.length() ,
-                #                 (headway[env.k.vehicle.get_lane(1)] -
-                #                 env.k.vehicle.get_x_by_id(veh_id)) % env.k.network.length()]
-                # print('headway:{},RL_lane:{}, lane_leader:{}'.format(headway, env.k.vehicle.get_lane(veh_id),lane_leaders))
-                if env.k.vehicle.get_lane(veh_id) == 0 and headway[0] < headway[1]:
-                    reward -= mlp * (headway[1])
-                    # print('AT lane0 {},{},{}'.format(headway, reward, env.time_counter))
-                elif env.k.vehicle.get_lane(veh_id) == 1 and headway[1] < headway[0]:
-                    reward -= mlp * (headway[0])
-                    # print('AT lane1 {},{},{}'.format(headway, reward, env.time_counter))
-                # print('time:{}, rl_lane:{}, reward:{}, headway:{}'.format(env.time_counter, env.k.vehicle.get_lane(veh_id), reward, headway))
+                if headway[env.k.vehicle.get_previous_lane(veh_id)] > headway[env.k.vehicle.get_lane(veh_id)]:
+                    reward -= mlp * (headway[env.k.vehicle.get_previous_lane(veh_id)])
 
+                # print('now:{} before:{} time:{} reward:{}'.format(env.k.vehicle.get_lane(veh_id),
+                #                                           env.k.vehicle.get_previous_lane(veh_id), env.time_counter, reward))
+                # # 2 LANE REWARD
+                # if env.k.vehicle.get_lane(veh_id) == 0 and headway[0] < headway[1]:
+                #     reward -= mlp * (headway[1])
+                #     # print('AT lane0 {},{},{}'.format(headway, reward, env.time_counter))
+                # elif env.k.vehicle.get_lane(veh_id) == 1 and headway[1] < headway[0]:
+                #     reward -= mlp * (headway[0])
     return reward
 
 def simple_lc_penalty(env):

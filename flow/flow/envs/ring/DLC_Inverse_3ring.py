@@ -55,7 +55,7 @@ class DLCIAccelEnv3(AccelEnv):
 
         lb = [-abs(max_decel), -1] * self.initial_vehicles.num_rl_vehicles
         ub = [max_accel, 1.] * self.initial_vehicles.num_rl_vehicles
-        # shape = self.initial_vehicles.num_rl_vehicles + 3,
+        shape = self.initial_vehicles.num_rl_vehicles + 1,
         return Box(np.array(lb), np.array(ub), dtype=np.float32)
 
     @property
@@ -252,7 +252,7 @@ class DLCIAccelPOEnv3(DLCIAccelEnv3):
         return Box(
             low=-1,
             high=1,
-            shape=((3 * 2 * 2) + 2, ),
+            shape=(3 * 2 * 2 + 2, ),
             # shape=(2 * self.initial_vehicles.num_rl_vehicles *
             #        (self.num_lanes + 5) + 2,),
             dtype=np.float32)
@@ -296,34 +296,42 @@ class DLCIAccelPOEnv3(DLCIAccelEnv3):
         #           for speed in lane_followers_speed + lane_leaders_speed + rl_speed]
 
         for i in range(0, max_lanes):
-            lane_followers_speed = lane_followers_speed[max(0, i - 1):i + 2]
-            lane_leaders_speed = lane_leaders_speed[max(0, i - 1):i + 2]
-            lane_leaders_pos = lane_leaders_pos[max(0, i - 1):i + 2]
-            lane_followers_pos = lane_followers_pos[max(0, i - 1):i + 2]
+            # print(max_lanes)
             if self.k.vehicle.get_lane(rl) == i:
+                lane_followers_speed = lane_followers_speed[max(0, i - 1):i + 2]
+                lane_leaders_speed = lane_leaders_speed[max(0, i - 1):i + 2]
+                lane_leaders_pos = lane_leaders_pos[max(0, i - 1):i + 2]
+                lane_followers_pos = lane_followers_pos[max(0, i - 1):i + 2]
                 if i == 0:
                     f_sp = [speed / max_speed
-                            for speed in [max_speed] + lane_followers_speed + rl_speed]
+                            for speed in lane_followers_speed + rl_speed]
+                    f_sp.insert(0, -1.)
                     l_sp = [speed / max_speed
-                            for speed in [max_speed] + lane_leaders_speed]
+                            for speed in lane_leaders_speed]
+                    l_sp.insert(0, -1.)
                     f_pos = [-((self.k.vehicle.get_x_by_id(rl) - pos) % length / length)
-                         for pos in
-                             [self.k.vehicle.get_x_by_id(rl)] + lane_followers_pos]
+                             for pos in lane_followers_pos]
+                    f_pos.insert(0, -1.)
                     l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
-                             for pos in
-                             [self.k.vehicle.get_x_by_id(rl)] + lane_leaders_pos]
+                             for pos in lane_leaders_pos]
+                    l_pos.insert(0, -1.)
 
-                elif i == max_lanes:
+                elif i == max_lanes-1:
                     f_sp = [speed / max_speed
-                            for speed in lane_followers_speed + [max_speed] + rl_speed]
+                            for speed in lane_followers_speed + rl_speed]
+                    f_sp.insert(2, -1.)
                     l_sp = [speed / max_speed
-                            for speed in lane_leaders_speed + [max_speed]]
+                            for speed in lane_leaders_speed]
+                    l_sp.insert(2, -1.)
                     f_pos = [-((self.k.vehicle.get_x_by_id(rl) - pos) % length / length)
                              for pos in
-                             lane_leaders_pos + [self.k.vehicle.get_x_by_id(rl)]]
+                             lane_leaders_pos]
+                    f_pos.insert(2, -1.)
                     l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
                              for pos in
-                             lane_leaders_pos + [self.k.vehicle.get_x_by_id(rl)]]
+                             lane_leaders_pos]
+                    l_pos.insert(2, -1.)
+
                 else:
                     f_sp = [speed / max_speed
                             for speed in lane_followers_speed + rl_speed]
