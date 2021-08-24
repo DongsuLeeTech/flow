@@ -192,18 +192,18 @@ def meaningless_penalty(env):
                 lane_leaders = env.k.vehicle.get_lane_leaders(veh_id)
                 headway = [(env.k.vehicle.get_x_by_id(leader) - env.k.vehicle.get_x_by_id(veh_id))
                            % env.k.network.length() / env.k.network.length() for leader in lane_leaders]
-
-                if headway[env.k.vehicle.get_previous_lane(veh_id)] > headway[env.k.vehicle.get_lane(veh_id)]:
-                    reward -= mlp * (headway[env.k.vehicle.get_previous_lane(veh_id)])
+                # FOR N LANE
+                # if headway[env.k.vehicle.get_previous_lane(veh_id)] > headway[env.k.vehicle.get_lane(veh_id)]:
+                #     reward -= mlp * (headway[env.k.vehicle.get_previous_lane(veh_id)])
 
                 # print('now:{} before:{} time:{} reward:{}'.format(env.k.vehicle.get_lane(veh_id),
                 #                                           env.k.vehicle.get_previous_lane(veh_id), env.time_counter, reward))
-                # # 2 LANE REWARD
-                # if env.k.vehicle.get_lane(veh_id) == 0 and headway[0] < headway[1]:
-                #     reward -= mlp * (headway[1])
-                #     # print('AT lane0 {},{},{}'.format(headway, reward, env.time_counter))
-                # elif env.k.vehicle.get_lane(veh_id) == 1 and headway[1] < headway[0]:
-                #     reward -= mlp * (headway[0])
+                # # FOR 2 LANE
+                if env.k.vehicle.get_lane(veh_id) == 0 and headway[0] < headway[1]:
+                    reward -= mlp * (headway[1])
+                    # print('AT lane0 {},{},{}'.format(headway, reward, env.time_counter))
+                elif env.k.vehicle.get_lane(veh_id) == 1 and headway[1] < headway[0]:
+                    reward -= mlp * (headway[0])
     return reward
 
 def simple_lc_penalty(env):

@@ -219,7 +219,7 @@ class DLCIAccelEnv2(AccelEnv):
         self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
         self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction)
 
-    def additional_command(Self):
+    def additional_command(self):
         """Define which vehicles are observed for visualization purposes."""
         # specify observed vehicles
         if self.k.vehicle.num_rl_vehicles > 0:
