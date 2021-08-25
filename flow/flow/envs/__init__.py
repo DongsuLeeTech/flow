@@ -15,7 +15,7 @@ from flow.envs.test import TestEnv
 from flow.envs.ring.LC_Inverse_ring import *
 from flow.envs.ring.DLC_Inverse_ring import *
 from flow.envs.ring.DLC_Inverse_ring_v2 import *
-from flow.envs.ring.DLC_Inverse_3ring import *
+from flow.envs.ring.DLC_Foward_3ring import *
 from flow.envs.ring.Inverse_3Lane_ring import *
 # deprecated classes whose names have changed
 from flow.envs.bottleneck_env import BottleNeckAccelEnv
@@ -52,8 +52,8 @@ __all__ = [
     'DLCIAccelPOEnv',
     'DLCIAccelEnv2',
     'DLCIAccelPOEnv2',
-    'DLCIAccelEnv3',
-    'DLCIAccelPOEnv3',
+    'DLCFAccelEnv',
+    'DLCFAccelPOEnv',
     'TD3LCIAccelEnv',
     'TD3LCIAccelPOEnv'
 ]

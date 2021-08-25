@@ -30,7 +30,7 @@ ADDITIONAL_ENV_PARAMS = {
 }
 
 
-class DLCIAccelEnv3(AccelEnv):
+class DLCFAccelEnv(AccelEnv):
     """Fully observable lane change and acceleration environment.
 
     This environment is used to train autonomous vehicles to improve traffic
@@ -173,19 +173,6 @@ class DLCIAccelEnv3(AccelEnv):
 
         return np.array(speed + pos + lane)
 
-    # def _to_lc_action(self, rl_action):
-    #     """Make direction components of rl_action to discrete"""
-    #     if rl_action is None:
-    #         return rl_action
-    #     for i in range(1, len(rl_action), 2):
-    #         if rl_action[i] <= -0.333:
-    #             rl_action[i] = -1
-    #         elif rl_action[i] >= 0.333:
-    #             rl_action[i] = 1
-    #         else:
-    #             rl_action[i] = 0
-    #     return rl_action
-
     def _apply_rl_actions(self, actions):
         # actions = self._to_lc_action(actions)
         acceleration = actions[::2]
@@ -227,7 +214,7 @@ class DLCIAccelEnv3(AccelEnv):
                 self.k.vehicle.set_observed(veh_id)
 
 
-class DLCIAccelPOEnv3(DLCIAccelEnv3):
+class DLCFAccelPOEnv(DLCFAccelEnv):
     """POMDP version of LaneChangeAccelEnv.
 
         Required from env_params:
@@ -266,10 +253,6 @@ class DLCIAccelPOEnv3(DLCIAccelEnv3):
             self.k.network.num_lanes(edge)
             for edge in self.k.network.get_edge_list())
 
-        # # coef
-        # rl_des = self.initial_config.reward_params.get('rl_desired_speed', 0)
-        # uns4IDM_p = self.initial_config.reward_params.get('uns4IDM_penalty', 0)
-
         # NOTE: this works for only single agent environmnet
         rl = self.k.vehicle.get_rl_ids()[0]
         lane_followers = self.k.vehicle.get_lane_followers(rl)
@@ -278,22 +261,14 @@ class DLCIAccelPOEnv3(DLCIAccelEnv3):
         # Velocity of vehicles
         lane_followers_speed = self.k.vehicle.get_lane_followers_speed(rl)
         lane_leaders_speed = self.k.vehicle.get_lane_leaders_speed(rl)
-        rl_speed = [self.k.vehicle.get_speed(rl)]
-        for i in rl_speed:
-            if i / max_speed > 1:
-                rl_speed = [1.]
+        rl_speed = self.k.vehicle.get_speed(rl)
+        # for i in rl_speed:
+        if rl_speed / max_speed > 1:
+            rl_speed = 1.
 
         # Position of Vehicles
         lane_followers_pos = [self.k.vehicle.get_x_by_id(follower) for follower in lane_followers]
         lane_leaders_pos = [self.k.vehicle.get_x_by_id(leader) for leader in lane_leaders]
-
-        # #  Relative Lane of Vehicles
-        # follower_lanes = [self.k.vehicle.get_lane(follower) for follower in lane_followers]
-        # leader_lanes = [self.k.vehicle.get_lane(leader) for leader in lane_leaders]
-
-        #  Normalization of states
-        # speeds = [speed / max_speed
-        #           for speed in lane_followers_speed + lane_leaders_speed + rl_speed]
 
         for i in range(0, max_lanes):
             # print(max_lanes)
@@ -302,11 +277,12 @@ class DLCIAccelPOEnv3(DLCIAccelEnv3):
                 lane_leaders_speed = lane_leaders_speed[max(0, i - 1):i + 2]
                 lane_leaders_pos = lane_leaders_pos[max(0, i - 1):i + 2]
                 lane_followers_pos = lane_followers_pos[max(0, i - 1):i + 2]
+
                 if i == 0:
-                    f_sp = [speed / max_speed
-                            for speed in lane_followers_speed + rl_speed]
+                    f_sp = [(speed - rl_speed) / max_speed
+                            for speed in lane_followers_speed]
                     f_sp.insert(0, -1.)
-                    l_sp = [speed / max_speed
+                    l_sp = [(speed - rl_speed) / max_speed
                             for speed in lane_leaders_speed]
                     l_sp.insert(0, -1.)
                     f_pos = [-((self.k.vehicle.get_x_by_id(rl) - pos) % length / length)
@@ -315,12 +291,13 @@ class DLCIAccelPOEnv3(DLCIAccelEnv3):
                     l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
                              for pos in lane_leaders_pos]
                     l_pos.insert(0, -1.)
+                    lanes = [-1.]
 
-                elif i == max_lanes-1:
-                    f_sp = [speed / max_speed
-                            for speed in lane_followers_speed + rl_speed]
+                elif i == max_lanes - 1:
+                    f_sp = [(speed - rl_speed) / max_speed
+                            for speed in lane_followers_speed]
                     f_sp.insert(2, -1.)
-                    l_sp = [speed / max_speed
+                    l_sp = [(speed - rl_speed) / max_speed
                             for speed in lane_leaders_speed]
                     l_sp.insert(2, -1.)
                     f_pos = [-((self.k.vehicle.get_x_by_id(rl) - pos) % length / length)
@@ -331,26 +308,23 @@ class DLCIAccelPOEnv3(DLCIAccelEnv3):
                              for pos in
                              lane_leaders_pos]
                     l_pos.insert(2, -1.)
+                    lanes = [1.]
 
                 else:
-                    f_sp = [speed / max_speed
-                            for speed in lane_followers_speed + rl_speed]
-                    l_sp = [speed / max_speed
+                    f_sp = [(speed - rl_speed) / max_speed
+                            for speed in lane_followers_speed]
+                    l_sp = [(speed - rl_speed) / max_speed
                             for speed in lane_leaders_speed]
                     f_pos = [-((self.k.vehicle.get_x_by_id(rl) - pos) % length / length)
                              for pos in lane_leaders_pos]
                     l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
                              for pos in lane_leaders_pos]
+                    lanes = [0]
 
-        positions = l_pos + f_pos
-        speeds = l_sp + f_sp
-        lanes = [self.k.vehicle.get_lane(rl) / (max_lanes - 1)]
-        # lanes = [lane / max_lanes
-        #          for lane in follower_lanes + leader_lanes + [self.k.vehicle.get_lane(rl)]]
+                rl_sp = [rl_speed / max_speed]
+                positions = l_pos + f_pos
+                speeds = rl_sp + l_sp + f_sp
 
-        # coef = [rl_des, uns4IDM_p]
-
-        # observation = np.array(speeds + positions + lanes + coef)
         observation = np.array(speeds + positions + lanes)
         return observation
 

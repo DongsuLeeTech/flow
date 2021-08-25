@@ -252,7 +252,7 @@ class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
         return Box(
             low=-1,
             high=1,
-            shape=(3 * 2 * 2 + 2, ),
+            shape=(3 * 2 * 2 + 2 + 3, ),
             # shape=(2 * self.initial_vehicles.num_rl_vehicles *
             #        (self.num_lanes + 5) + 2,),
             dtype=np.float32)
@@ -280,9 +280,9 @@ class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
         lane_followers_speed = self.k.vehicle.get_lane_followers_speed(rl)
         lane_leaders_speed = self.k.vehicle.get_lane_leaders_speed(rl)
         rl_speed = self.k.vehicle.get_speed(rl)
-        for i in rl_speed:
-            if i / max_speed > 1:
-                rl_speed = 1.
+        # for i in rl_speed:
+        if rl_speed / max_speed > 1:
+            rl_speed = 1.
 
         # Position of Vehicles
         lane_followers_pos = [self.k.vehicle.get_x_by_id(follower) for follower in lane_followers]
@@ -353,7 +353,7 @@ class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
         # lanes = [lane / max_lanes
         #          for lane in follower_lanes + leader_lanes + [self.k.vehicle.get_lane(rl)]]
 
-        coef = [rl_des, uns4IDM_p, mlp]
+        coef = [i / 2 for i in [rl_des, uns4IDM_p, mlp]]
 
         observation = np.array(speeds + positions + lanes + coef)
         # observation = np.array(speeds + positions + lanes)
