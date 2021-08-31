@@ -5,6 +5,7 @@ from flow.core.params import InitialConfig
 from flow.core.params import TrafficLightParams
 from numpy import pi, sin, cos, linspace
 import numpy as np
+import random
 
 ADDITIONAL_NET_PARAMS = {
     # length of the ring road
@@ -256,7 +257,7 @@ class RingNetwork(Network):
         return startpos, startlane
 
     @staticmethod
-    def gen_custom_start_pos2(cls, net_params, initial_config, num_vehicles):
+    def gen_custom_start_pos2(cls, net_params,  pos_util, initial_config, num_vehicles):
         VEHICLE_LENGTH = 5
 
         length = net_params.additional_params['length']
@@ -274,24 +275,25 @@ class RingNetwork(Network):
         edges = ['bottom', 'right', 'top', 'left']
         edge_length = length // 4
 
-        startpos.append((edges[0], 0))
-        startlane.append(0)
+        # startpos.append((edges[0], 0))
 
         lane_index = list(range(0, num_lane, 3)) + list(range(1, num_lane, 3)) + list(range(2, num_lane, 3))
-        startlane += [lane_index[i % len(lane_index)] for i in range(num_vehicles - 1)]
+        startlane += [lane_index[i % len(lane_index)] for i in range(num_vehicles-1)]
 
         pos = 0
-        for veh in range(num_vehicles):
+        for veh in range(num_vehicles-1):
             if veh % 2 == 1:
                 pos = pos + 1.3*(my_min_gap + VEHICLE_LENGTH)
             if veh % 2 == 0:
                 pos = pos
+
             startpos.append((edges[int(pos // edge_length)], pos % edge_length))
-            # startlane.append((startlane[-1] + 1+int(num_lane>2)) % num_lane)
-        else:
-            rl_pos = startpos.pop(0)
-            rl_lane = startlane.pop(0)
-            startpos.append(rl_pos)
-            startlane.append(rl_lane)
+
+        # the AV random generator
+        startpos.append((random.choice(edges), random.randrange(5,60,5)))
+        startlane.append(0)
+        #
+        # print(startlane)
+        # print(startpos)
 
         return startpos, startlane

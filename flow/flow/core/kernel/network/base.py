@@ -504,7 +504,7 @@ class BaseKernelNetwork(object):
             num_vehicles=num_vehicles,
         )
 
-    def gen_custom_start_pos2(self,initial_config, num_vehicles):
+    def gen_custom_start_pos2(self, initial_config, num_vehicles):
         """Generate a user defined set of starting positions.
 
         This is called straight from the network class.
@@ -526,6 +526,7 @@ class BaseKernelNetwork(object):
         return self.network.gen_custom_start_pos2(
             cls=self,
             net_params=self.network.net_params,
+            pos_util=self._get_start_pos_util,
             initial_config=initial_config,
             num_vehicles=num_vehicles,
         )

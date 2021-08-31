@@ -30,7 +30,7 @@ ADDITIONAL_ENV_PARAMS = {
 }
 
 
-class TD3LCIAccelEnv(AccelEnv):
+class DLCIAccelEnv3(AccelEnv):
     """Fully observable lane change and acceleration environment.
 
     This environment is used to train autonomous vehicles to improve traffic
@@ -173,19 +173,6 @@ class TD3LCIAccelEnv(AccelEnv):
 
         return np.array(speed + pos + lane)
 
-    # def _to_lc_action(self, rl_action):
-    #     """Make direction components of rl_action to discrete"""
-    #     if rl_action is None:
-    #         return rl_action
-    #     for i in range(1, len(rl_action), 2):
-    #         if rl_action[i] <= -0.333:
-    #             rl_action[i] = -1
-    #         elif rl_action[i] >= 0.333:
-    #             rl_action[i] = 1
-    #         else:
-    #             rl_action[i] = 0
-    #     return rl_action
-
     def _apply_rl_actions(self, actions):
         # actions = self._to_lc_action(actions)
         acceleration = actions[::2]
@@ -227,7 +214,7 @@ class TD3LCIAccelEnv(AccelEnv):
                 self.k.vehicle.set_observed(veh_id)
 
 
-class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
+class DLCIAccelPOEnv3(DLCIAccelEnv3):
     """POMDP version of LaneChangeAccelEnv.
 
         Required from env_params:
@@ -252,7 +239,7 @@ class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
         return Box(
             low=-1,
             high=1,
-            shape=(3 * 2 * 2 + 2 + 3, ),
+            shape=(3 * 2 * 2 + 2, ),
             # shape=(2 * self.initial_vehicles.num_rl_vehicles *
             #        (self.num_lanes + 5) + 2,),
             dtype=np.float32)
@@ -265,11 +252,6 @@ class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
         max_lanes = max(
             self.k.network.num_lanes(edge)
             for edge in self.k.network.get_edge_list())
-
-        # coef
-        rl_des = self.initial_config.reward_params.get('rl_desired_speed', 0)
-        uns4IDM_p = self.initial_config.reward_params.get('uns4IDM_penalty', 0)
-        mlp = self.initial_config.reward_params.get('meaningless_penalty', 0)
 
         # NOTE: this works for only single agent environmnet
         rl = self.k.vehicle.get_rl_ids()[0]
@@ -289,7 +271,7 @@ class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
         lane_leaders_pos = [self.k.vehicle.get_x_by_id(leader) for leader in lane_leaders]
 
         for i in range(0, max_lanes):
-            
+            # print(max_lanes)
             if self.k.vehicle.get_lane(rl) == i:
                 lane_followers_speed = lane_followers_speed[max(0, i - 1):i + 2]
                 lane_leaders_speed = lane_leaders_speed[max(0, i - 1):i + 2]
@@ -311,7 +293,7 @@ class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
                     l_pos.insert(0, -1.)
                     lanes = [-1.]
 
-                elif i == max_lanes-1:
+                elif i == max_lanes - 1:
                     f_sp = [(speed - rl_speed) / max_speed
                             for speed in lane_followers_speed]
                     f_sp.insert(2, -1.)
@@ -339,12 +321,11 @@ class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
                              for pos in lane_leaders_pos]
                     lanes = [0]
 
-        rl_sp = [rl_speed / max_speed]
-        positions = l_pos + f_pos
-        speeds = rl_sp + l_sp + f_sp
-        coef = [i / 2 for i in [rl_des, uns4IDM_p, mlp]]
+                rl_sp = [rl_speed / max_speed]
+                positions = l_pos + f_pos
+                speeds = rl_sp + l_sp + f_sp
 
-        observation = np.array(speeds + positions + lanes + coef)
+        observation = np.array(speeds + positions + lanes)
         return observation
 
     def additional_command(self):
