@@ -67,7 +67,7 @@ class DLCFAccelEnv(AccelEnv):
             shape=(3 * self.initial_vehicles.num_vehicles,),
             dtype=np.float32)
 
-    def compute_reward(self, rl_actions, **kwargs):
+    def compute_reward(self, actions, **kwargs):
         rls = self.k.vehicle.get_rl_ids()
         reward = 0
 
@@ -112,7 +112,7 @@ class DLCFAccelEnv(AccelEnv):
                     rwds['uns4IDM_penalty'] += pen
 
                 if acc_p:
-                    pen = rewards.punish_accelerations(self, rl_actions)
+                    pen = rewards.punish_accelerations(self, actions)
                     reward += pen
                     rwds['acc_penalty'] += pen
 
@@ -127,7 +127,7 @@ class DLCFAccelEnv(AccelEnv):
                     rwds['dc3_penalty'] += pen
 
             if rl_action_p:
-                pen = rewards.rl_action_penalty(self, rl_actions)
+                pen = rewards.rl_action_penalty(self, actions)
                 reward += pen
                 rwds['rl_action_penalty'] += pen
         # print(rwds)
@@ -139,7 +139,7 @@ class DLCFAccelEnv(AccelEnv):
         # print(rwd)
 
         if self.env_params.evaluate:
-            self.evaluate_rewards(rl_actions, self.initial_config.reward_params.keys())
+            self.evaluate_rewards(actions, self.initial_config.reward_params.keys())
 
             if self.accumulated_reward is None:
                 self.accumulated_reward = defaultdict(int)
@@ -291,7 +291,7 @@ class DLCFAccelPOEnv(DLCFAccelEnv):
                     l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
                              for pos in lane_leaders_pos]
                     l_pos.insert(0, -1.)
-                    lanes = [-1.]
+                    lanes = [0.]
 
                 elif i == max_lanes - 1:
                     f_sp = [(speed - rl_speed) / max_speed
@@ -319,7 +319,7 @@ class DLCFAccelPOEnv(DLCFAccelEnv):
                              for pos in lane_leaders_pos]
                     l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
                              for pos in lane_leaders_pos]
-                    lanes = [0]
+                    lanes = [0.5]
 
                 rl_sp = [rl_speed / max_speed]
                 positions = l_pos + f_pos

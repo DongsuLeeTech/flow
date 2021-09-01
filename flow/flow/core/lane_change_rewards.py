@@ -114,7 +114,14 @@ def punish_accelerations(env,rl_action):
 
         return acc_p * (accel_threshold - mean_actions)
 
-def rl_action_penalty(env, rl_action):
+def new_softmax(a):
+        c = np.max(a)  # 최댓값
+        exp_a = np.exp(a - c)  # 각각의 원소에 최댓값을 뺀 값에 exp를 취한다. (이를 통해 overflow 방지)
+        sum_exp_a = np.sum(exp_a)
+        y = exp_a / sum_exp_a
+        return y
+
+def rl_action_penalty(env, actions):
     """
 
     Parameters
@@ -126,43 +133,51 @@ def rl_action_penalty(env, rl_action):
     -------
 
     """
-    def new_softmax(a):
-        c = np.max(a)  # 최댓값
-        exp_a = np.exp(a - c)  # 각각의 원소에 최댓값을 뺀 값에 exp를 취한다. (이를 통해 overflow 방지)
-        sum_exp_a = np.sum(exp_a)
-        y = exp_a / sum_exp_a
-        return y
 
     action_penalty = env.initial_config.reward_params.get('rl_action_penalty', 0)
-    if rl_action is None or action_penalty == 0:
+    if actions is None or action_penalty == 0:
         return 0
 
-    rls = env.k.vehicle.get_rl_ids()
+    veh_id = env.k.vehicle.get_rl_ids()
     #  boolean condition
-    lc_failed = np.array(env.last_lane) == np.array(env.k.vehicle.get_lane(rls))
-    lc_rl_action = np.zeros_like(rl_action)
 
-    if isinstance(env.action_space, Box):
-        lc_rl_action = np.array(rl_action[1:])
-        d_list = new_softmax(lc_rl_action)
-        for i in range(len(d_list)):
-            if d_list[i] == max(d_list):
-                d_list[i] = 1.
-            else:
-                d_list[i] = 0.
+    direction = actions[1::2]
 
-        if d_list[0] == 1:
-            lc_rl_action = np.array([-1.])
-        elif d_list[1] == 1:
-            lc_rl_action = np.array([0.])
-        elif d_list[2] == 1:
-            lc_rl_action = np.array([1.])
+    for i in range(len(direction)):
+        if direction[i] <= -0.333:
+            direction[i] = -1
+        elif direction[i] >= 0.333:
+            direction[i] = 1
+        else:
+            direction[i] = 0
+            
+    reward = 0
+    if direction:
+        if env.k.vehicle.get_previous_lane(veh_id) == env.k.vehicle.get_lane(veh_id):
+            reward -= action_penalty
+            
+    return reward
+    # if isinstance(env.action_space, Box):
+    #     lc_rl_action = np.array(rl_action[1:])
+    #     d_list = new_softmax(lc_rl_action)
+    #     for i in range(len(d_list)):
+    #         if d_list[i] == max(d_list):
+    #             d_list[i] = 1.
+    #         else:
+    #             d_list[i] = 0.
+    # 
+    #     if d_list[0] == 1:
+    #         lc_rl_action = np.array([-1.])
+    #     elif d_list[1] == 1:
+    #         lc_rl_action = np.array([0.])
+    #     elif d_list[2] == 1:
+    #         lc_rl_action = np.array([1.])
     # elif isinstance(env.action_space, Tuple):
-    #     lc_rl_action = rl_action[1] - 1
-    if any(lc_rl_action) and any(lc_failed):
-        return -action_penalty * sum(lc_failed)
-    else:
-        return 0
+    # #     lc_rl_action = rl_action[1] - 1
+    # if any(lc_rl_action) and any(lc_failed):
+    #     return -action_penalty * sum(lc_failed)
+    # else:
+    #     return 0
 
 # def meaningless_penalty(env):
 #     mlp = env.initial_config.reward_params.get('meaningless_penalty', 0)

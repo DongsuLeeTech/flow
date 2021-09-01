@@ -257,7 +257,7 @@ class RingNetwork(Network):
         return startpos, startlane
 
     @staticmethod
-    def gen_custom_start_pos2(cls, net_params,  pos_util, initial_config, num_vehicles):
+    def gen_custom_start_pos2(cls, net_params, initial_config, num_vehicles):
         VEHICLE_LENGTH = 5
 
         length = net_params.additional_params['length']
@@ -288,12 +288,9 @@ class RingNetwork(Network):
                 pos = pos
 
             startpos.append((edges[int(pos // edge_length)], pos % edge_length))
-
         # the AV random generator
-        startpos.append((random.choice(edges), random.randrange(5,60,5)))
-        startlane.append(0)
-        #
-        # print(startlane)
-        # print(startpos)
+        rl_pos = random.randrange(16, length, 32)
+        startpos.append((edges[int(rl_pos // edge_length)], rl_pos % edge_length))
+        startlane.append(random.choice([0,1,2]))
 
         return startpos, startlane
