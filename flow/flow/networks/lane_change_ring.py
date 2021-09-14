@@ -291,6 +291,6 @@ class RingNetwork(Network):
         # the AV random generator
         rl_pos = random.randrange(16, length, 32)
         startpos.append((edges[int(rl_pos // edge_length)], rl_pos % edge_length))
-        startlane.append(random.choice([0,1,2]))
+        startlane.append(random.choice([0, 1, 2]))
 
         return startpos, startlane

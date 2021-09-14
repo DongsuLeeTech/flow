@@ -208,8 +208,9 @@ def meaningless_penalty(env):
                 headway = [(env.k.vehicle.get_x_by_id(leader) - env.k.vehicle.get_x_by_id(veh_id))
                            % env.k.network.length() / env.k.network.length() for leader in lane_leaders]
                 # FOR N LANE
-                if headway[env.k.vehicle.get_previous_lane(veh_id)] > headway[env.k.vehicle.get_lane(veh_id)]:
+                if headway[env.k.vehicle.get_previous_lane(veh_id)] - headway[env.k.vehicle.get_lane(veh_id)] > 5:
                     reward -= mlp * (headway[env.k.vehicle.get_previous_lane(veh_id)])
+
 
                 # print('now:{} before:{} time:{} reward:{}'.format(env.k.vehicle.get_lane(veh_id),
                 #                                           env.k.vehicle.get_previous_lane(veh_id), env.time_counter, reward))

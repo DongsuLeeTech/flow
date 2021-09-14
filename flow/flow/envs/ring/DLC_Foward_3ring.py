@@ -130,7 +130,7 @@ class DLCFAccelEnv(AccelEnv):
                 pen = rewards.rl_action_penalty(self, actions)
                 reward += pen
                 rwds['rl_action_penalty'] += pen
-        # print(rwds)
+        # print(rwds, self.time_counter, actions)
         rwd = sum(rwds.values())
         # if rwd :
         #     print('accumulative reward is negative:{}\nelements of reward:{}'.format(rwd,rwds))
@@ -223,7 +223,6 @@ class DLCFAccelPOEnv(DLCFAccelEnv):
         * max_decel: maximum deceleration for autonomous vehicles, in m/s^2
         * lane_change_duration: lane change duration for autonomous vehicles, in s
         * target_velocity: desired velocity for all vehicles in the network, in m/s
-
     """
 
     def __init__(self, env_params, sim_params, network, simulator='traci'):
