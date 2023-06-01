@@ -213,6 +213,17 @@ class MultiEnv(MultiAgentEnv, Env):
             type_id, edge, lane_index, pos, speed = \
                 self.initial_state[veh_id]
 
+            # BMIL edited
+            # FIXME: You must fit the data types of parameters in Env.k.vehicles.add()
+            # see the docs: https://sumo.dlr.de/docs/TraCI/Add_Vehicle.html
+            veh_id = str(veh_id)
+            type_id = str(type_id)
+            edge = str(edge)
+            lane_index = str(lane_index)
+            pos = float(pos)
+            speed = float(speed)
+
+
             try:
                 self.k.vehicle.add(
                     veh_id=veh_id,
@@ -226,7 +237,8 @@ class MultiEnv(MultiAgentEnv, Env):
                 # now and then reintroduce it
                 self.k.vehicle.remove(veh_id)
                 if self.simulator == 'traci':
-                    self.k.kernel_api.vehicle.remove(veh_id)  # FIXME: hack
+                    # self.k.kernel_api.vehicle.remove(veh_id)  # FIXME: hack
+                    self.k.vehicle.remove(veh_id)
                 self.k.vehicle.add(
                     veh_id=veh_id,
                     type_id=type_id,
@@ -245,15 +257,30 @@ class MultiEnv(MultiAgentEnv, Env):
         if self.sim_params.render:
             self.k.vehicle.update_vehicle_colors()
 
+        if self.simulator == 'traci':
+            initial_ids = self.k.kernel_api.vehicle.getIDList()
+        else:
+            initial_ids = self.initial_ids
+
         # check to make sure all vehicles have been spawned
-        if len(self.initial_ids) > self.k.vehicle.num_vehicles:
+        # if len(self.initial_ids) > self.k.vehicle.num_vehicles:
+        if len(self.initial_ids) > len(initial_ids):
             missing_vehicles = list(
-                set(self.initial_ids) - set(self.k.vehicle.get_ids()))
+                set(self.initial_ids) - set(initial_ids))
             msg = '\nNot enough vehicles have spawned! Bad start?\n' \
                   'Missing vehicles / initial state:\n'
             for veh_id in missing_vehicles:
                 msg += '- {}: {}\n'.format(veh_id, self.initial_state[veh_id])
             raise FatalFlowError(msg=msg)
+
+        states = self.get_state()
+
+        # collect information of the state of the network based on the
+        # environment class used
+        self.state = np.asarray(states).T
+
+        # observation associated with the reset (no warm-up steps)
+        observation = np.copy(states)
 
         # perform (optional) warm-up steps before training
         for _ in range(self.env_params.warmup_steps):
@@ -262,7 +289,7 @@ class MultiEnv(MultiAgentEnv, Env):
         # render a frame
         self.render(reset=True)
 
-        return self.get_state()
+        return observation
 
     def clip_actions(self, rl_actions=None):
         """Clip the actions passed from the RL agent.
@@ -311,3 +338,119 @@ class MultiEnv(MultiAgentEnv, Env):
         # clip according to the action space requirements
         clipped_actions = self.clip_actions(rl_actions)
         self._apply_rl_actions(clipped_actions)
+
+    def set_EFT(self, initial_state, new_inflow_rate=None):
+        # reset the time counter
+        self.time_counter = 0
+
+        if self.sim_params.restart_instance or \
+                (self.step_counter > 2e6 and self.simulator != 'aimsun'):
+            self.step_counter = 0
+            # issue a random seed to induce randomness into the next rollout
+            self.sim_params.seed = random.randint(0, 1e5)
+
+            self.k.vehicle = deepcopy(self.initial_vehicles)
+            self.k.vehicle.master_kernel = self.k
+            # restart the sumo instance
+            self.restart_simulation(self.sim_params)
+
+        # clear all vehicles from the network and the vehicles class
+        if self.simulator == 'traci':
+            for veh_id in self.k.kernel_api.vehicle.getIDList():  # FIXME: hack
+                try:
+                    self.k.vehicle.remove(veh_id)
+                except (FatalTraCIError, TraCIException):
+                    print(traceback.format_exc())
+
+        # clear all vehicles from the network and the vehicles class
+        # FIXME (ev, ak) this is weird and shouldn't be necessary
+        for veh_id in list(self.k.vehicle.get_ids()):
+            # do not try to remove the vehicles from the network in the first
+            # step after initializing the network, as there will be no vehicles
+            if self.step_counter == 0:
+                continue
+            try:
+                self.k.vehicle.remove(veh_id)
+            except (FatalTraCIError, TraCIException):
+                print("Error during start: {}".format(traceback.format_exc()))
+
+        # do any additional resetting of the vehicle class needed
+        self.k.vehicle.reset()
+
+        # reintroduce the initial vehicles to the network
+        for veh_id in self.initial_ids:
+            type_id, edge, lane_index, pos, speed = \
+                initial_state[veh_id]
+
+            # BMIL edited
+            # FIXME: You must fit the data types of parameters in Env.k.vehicles.add()
+            # see the docs: https://sumo.dlr.de/docs/TraCI/Add_Vehicle.html
+            veh_id = str(veh_id)
+            type_id = str(type_id)
+            edge = str(edge)
+            lane_index = str(lane_index)
+            pos = float(pos)
+            speed = float(speed)
+
+            try:
+                self.k.vehicle.add(
+                    veh_id=veh_id,
+                    type_id=type_id,
+                    edge=edge,
+                    lane=lane_index,
+                    pos=pos,
+                    speed=speed)
+            except (FatalTraCIError, TraCIException):
+                # if a vehicle was not removed in the first attempt, remove it
+                # now and then reintroduce it
+                self.k.vehicle.remove(veh_id)
+                if self.simulator == 'traci':
+                    # self.k.kernel_api.vehicle.remove(veh_id)  # FIXME: hack
+                    self.k.vehicle.remove(veh_id)
+                self.k.vehicle.add(
+                    veh_id=veh_id,
+                    type_id=type_id,
+                    edge=edge,
+                    lane=lane_index,
+                    pos=pos,
+                    speed=speed)
+
+        # advance the simulation in the simulator by one step
+        self.k.simulation.simulation_step()
+
+        # update the information in each kernel to match the current state
+        self.k.update(reset=True)
+
+        # update the colors of vehicles
+        if self.sim_params.render:
+            self.k.vehicle.update_vehicle_colors()
+
+        if self.simulator == 'traci':
+            initial_ids = self.k.kernel_api.vehicle.getIDList()
+        else:
+            initial_ids = self.initial_ids
+
+        # check to make sure all vehicles have been spawned
+        # if len(self.initial_ids) > self.k.vehicle.num_vehicles:
+        if len(self.initial_ids) > len(initial_ids):
+            missing_vehicles = list(
+                set(self.initial_ids) - set(initial_ids))
+            msg = '\nNot enough vehicles have spawned! Bad start?\n' \
+                  'Missing vehicles / initial state:\n'
+            for veh_id in missing_vehicles:
+                msg += '- {}: {}\n'.format(veh_id, initial_state[veh_id])
+            raise FatalFlowError(msg=msg)
+
+        states = self.get_state()
+
+        # collect information of the state of the network based on the
+        # environment class used
+        self.state = np.asarray(states).T
+
+        # observation associated with the reset (no warm-up steps)
+        observation = np.copy(states)
+
+        # render a frame
+        self.render(reset=True)
+
+        return observation

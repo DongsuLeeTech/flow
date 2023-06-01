@@ -12,8 +12,11 @@ ADDITIONAL_ENV_PARAMS = {
     "max_accel": 1,
     # maximum deceleration for autonomous vehicles, in m/s^2
     "max_decel": 1,
-    # desired velocity for all vehicles in the network, in m/s
-    "target_velocity": 20,
+    # # desired velocity for all vehicles in the network, in m/s
+    # "target_velocity": 20,
+    # bounds on the ranges of ring road lengths the autonomous vehicle is
+    # trained on
+    'ring_length': [220, 270],
 }
 
 

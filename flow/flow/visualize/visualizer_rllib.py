@@ -154,6 +154,9 @@ def visualizer_rllib(args):
     checkpoint = checkpoint + '/checkpoint-' + args.checkpoint_num
     agent.restore(checkpoint)
 
+    weights = agent.get_weights()
+    print(weights)
+
     if hasattr(agent, "local_evaluator") and \
             os.environ.get("TEST_FLAG") != 'True':
         env = agent.local_evaluator.env

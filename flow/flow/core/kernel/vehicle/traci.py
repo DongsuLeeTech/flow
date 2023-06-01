@@ -44,6 +44,7 @@ class TraCIVehicle(KernelVehicle):
 
         self.__ids = []  # ids of all vehicles
         self.__human_ids = []  # ids of human-driven vehicles
+        self.__pre_ids = []  # ids of pre_rl
         self.__controlled_ids = []  # ids of flow-controlled vehicles
         self.__controlled_lc_ids = []  # ids of flow lc-controlled vehicles
         self.__rl_ids = []  # ids of rl-controlled vehicles
@@ -467,7 +468,11 @@ class TraCIVehicle(KernelVehicle):
     def get_ids(self):
         """See parent class."""
         return self.__ids
-
+    
+    def get_pre_ids(self):
+        
+        return self.__pre_ids
+    
     def get_human_ids(self):
         """See parent class."""
         return self.__human_ids
@@ -1105,6 +1110,15 @@ class TraCIVehicle(KernelVehicle):
                 if self._force_color_update or 'color' not in \
                         self.type_parameters[self.get_type(veh_id)]:
                     self.set_color(veh_id=veh_id, color=color)
+            except (FatalTraCIError, TraCIException) as e:
+                print('Error when updating human vehicle colors:', e)
+
+        #  BMIL EDIT For Labelling Pre-Trained Vehicles
+        for veh_id in self.get_pre_ids():
+            try:
+                if self._force_color_update or 'color' not in \
+                        self.type_parameters[self.get_type(veh_id)]:
+                    self. set_color(veh_id=veh_id, color=GREEN)
             except (FatalTraCIError, TraCIException) as e:
                 print('Error when updating human vehicle colors:', e)
 

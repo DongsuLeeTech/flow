@@ -70,13 +70,12 @@ def unsafe_distance_penalty4IDM(env):
     #  Parameter of IDM
     T = 1
     a = 1
-    b = 1
+    b = 1.5
     s0 = 2
 
     v = env.k.vehicle.get_speed(rls)[0]
     # rl_lane = env.k.vehicle.get_lane(rls)
     tw = env.k.vehicle.get_tailway(rls)[0]
-
     follow_id = env.k.vehicle.get_follower(rls)[0]
     # if rl_lane == [0]:
     #     tw = env.k.vehicle.get_tailway(rls)[0]
@@ -94,13 +93,10 @@ def unsafe_distance_penalty4IDM(env):
     else:
         follow_vel = env.k.vehicle.get_speed(follow_id)
         s_star = s0 + max(
-            0, follow_vel * T + follow_vel * (follow_vel - v) /
+            0, follow_vel * T + follow_vel * (v - follow_vel) /
             (2 * np.sqrt(a * b)))
 
-    rwd = uns4IDM_p * max(-5, min(0, 1 - (s_star / tw) ** 2))
-    # if rwd < - 0:
-        # print('rwd:{}, tw:{}\n'.format(rwd, tw))
-    return rwd
+    return uns4IDM_p * min(0, 1 - (s_star / tw) ** 2)
 
 def punish_accelerations(env,rl_action):
     acc_p = env.initial_config.reward_params.get('acc_penalty', 0)
@@ -114,14 +110,7 @@ def punish_accelerations(env,rl_action):
 
         return acc_p * (accel_threshold - mean_actions)
 
-def new_softmax(a):
-        c = np.max(a)  # 최댓값
-        exp_a = np.exp(a - c)  # 각각의 원소에 최댓값을 뺀 값에 exp를 취한다. (이를 통해 overflow 방지)
-        sum_exp_a = np.sum(exp_a)
-        y = exp_a / sum_exp_a
-        return y
-
-def rl_action_penalty(env, actions):
+def rl_action_penalty(env, rl_action):
     """
 
     Parameters
@@ -133,93 +122,59 @@ def rl_action_penalty(env, actions):
     -------
 
     """
+    def new_softmax(a):
+        c = np.max(a)  # 최댓값
+        exp_a = np.exp(a - c)  # 각각의 원소에 최댓값을 뺀 값에 exp를 취한다. (이를 통해 overflow 방지)
+        sum_exp_a = np.sum(exp_a)
+        y = exp_a / sum_exp_a
+        return y
 
     action_penalty = env.initial_config.reward_params.get('rl_action_penalty', 0)
-    if actions is None or action_penalty == 0:
+    if rl_action is None or action_penalty == 0:
         return 0
 
-    veh_id = env.k.vehicle.get_rl_ids()
+    rls = env.k.vehicle.get_rl_ids()
     #  boolean condition
+    lc_failed = np.array(env.last_lane) == np.array(env.k.vehicle.get_lane(rls))
+    lc_rl_action = np.zeros_like(rl_action)
 
-    direction = actions[1::2]
+    if isinstance(env.action_space, Box):
+        lc_rl_action = np.array(rl_action[1:])
+        d_list = new_softmax(lc_rl_action)
+        for i in range(len(d_list)):
+            if d_list[i] == max(d_list):
+                d_list[i] = 1.
+            else:
+                d_list[i] = 0.
 
-    for i in range(len(direction)):
-        if direction[i] <= -0.333:
-            direction[i] = -1
-        elif direction[i] >= 0.333:
-            direction[i] = 1
-        else:
-            direction[i] = 0
-            
-    reward = 0
-    if direction:
-        if env.k.vehicle.get_previous_lane(veh_id) == env.k.vehicle.get_lane(veh_id):
-            reward -= action_penalty
-            
-    return reward
-    # if isinstance(env.action_space, Box):
-    #     lc_rl_action = np.array(rl_action[1:])
-    #     d_list = new_softmax(lc_rl_action)
-    #     for i in range(len(d_list)):
-    #         if d_list[i] == max(d_list):
-    #             d_list[i] = 1.
-    #         else:
-    #             d_list[i] = 0.
-    # 
-    #     if d_list[0] == 1:
-    #         lc_rl_action = np.array([-1.])
-    #     elif d_list[1] == 1:
-    #         lc_rl_action = np.array([0.])
-    #     elif d_list[2] == 1:
-    #         lc_rl_action = np.array([1.])
+        if d_list[0] == 1:
+            lc_rl_action = np.array([-1.])
+        elif d_list[1] == 1:
+            lc_rl_action = np.array([0.])
+        elif d_list[2] == 1:
+            lc_rl_action = np.array([1.])
     # elif isinstance(env.action_space, Tuple):
-    # #     lc_rl_action = rl_action[1] - 1
-    # if any(lc_rl_action) and any(lc_failed):
-    #     return -action_penalty * sum(lc_failed)
-    # else:
-    #     return 0
-
-# def meaningless_penalty(env):
-#     mlp = env.initial_config.reward_params.get('meaningless_penalty', 0)
-#     reward = 0
-#     if mlp:
-#         for veh_id in env.k.vehicle.get_rl_ids():
-#             if env.k.vehicle.get_last_lc(veh_id) == env.time_counter:
-#                 lane_leaders = env.k.vehicle.get_lane_leaders(veh_id)
-#                 headway = [env.k.vehicle.get_x_by_id(leader) for leader in lane_leaders]
-#                 lane_headway = (headway[env.k.vehicle.get_lane(veh_id)] -
-#                                 env.k.vehicle.get_x_by_id(veh_id))% env.k.network.length()
-#                 if lane_headway > 15:
-#                     reward -= mlp
-#                 else:
-#                     reward += mlp
-#
-#     return reward
+    #     lc_rl_action = rl_action[1] - 1
+    if any(lc_rl_action) and any(lc_failed):
+        return -action_penalty * sum(lc_failed)
+    else:
+        return 0
 
 def meaningless_penalty(env):
     mlp = env.initial_config.reward_params.get('meaningless_penalty', 0)
     reward = 0
-
     if mlp:
         for veh_id in env.k.vehicle.get_rl_ids():
-            # print(env.time_counter, env.k.vehicle.get_lane(veh_id))
             if env.k.vehicle.get_last_lc(veh_id) == env.time_counter:
                 lane_leaders = env.k.vehicle.get_lane_leaders(veh_id)
-                headway = [(env.k.vehicle.get_x_by_id(leader) - env.k.vehicle.get_x_by_id(veh_id))
-                           % env.k.network.length() / env.k.network.length() for leader in lane_leaders]
-                # FOR N LANE
-                if headway[env.k.vehicle.get_previous_lane(veh_id)] - headway[env.k.vehicle.get_lane(veh_id)] > 5:
-                    reward -= mlp * (headway[env.k.vehicle.get_previous_lane(veh_id)])
+                headway = [env.k.vehicle.get_x_by_id(leader) for leader in lane_leaders]
+                lane_headway = (headway[env.k.vehicle.get_lane(veh_id)] -
+                                env.k.vehicle.get_x_by_id(veh_id))% env.k.network.length()
+                if lane_headway > 15:
+                    reward -= mlp
+                else:
+                    reward += mlp
 
-
-                # print('now:{} before:{} time:{} reward:{}'.format(env.k.vehicle.get_lane(veh_id),
-                #                                           env.k.vehicle.get_previous_lane(veh_id), env.time_counter, reward))
-                # # # FOR 2 LANE
-                # if env.k.vehicle.get_lane(veh_id) == 0 and headway[0] < headway[1]:
-                #     reward -= mlp * (headway[1])
-                #     # print('AT lane0 {},{},{}'.format(headway, reward, env.time_counter))
-                # elif env.k.vehicle.get_lane(veh_id) == 1 and headway[1] < headway[0]:
-                #     reward -= mlp * (headway[0])
     return reward
 
 def simple_lc_penalty(env):
@@ -230,8 +185,8 @@ def simple_lc_penalty(env):
     for veh_id in env.k.vehicle.get_rl_ids():
         if env.k.vehicle.get_last_lc(veh_id) == env.time_counter:
             reward -= sim_lc_penalty
-    print(reward)
     return reward
+
 
 def follower_decel_penalty(env):
     """Reward function used to reward the RL vehicles cause the emergency stop of non RL vehicles

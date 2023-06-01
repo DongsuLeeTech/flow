@@ -5,6 +5,11 @@ from flow.core.params import InitialConfig
 from flow.core.params import TrafficLightParams
 from numpy import pi, sin, cos, linspace
 
+#bmil edit 23/01/09
+import math
+import copy
+import random
+
 ADDITIONAL_NET_PARAMS = {
     # length of the ring road
     "length": 230,
@@ -214,3 +219,77 @@ class RingNetwork(Network):
                       (":bottom_0", ring_length + 3 * junction_length)]
 
         return edgestarts
+
+
+#bmil edit 23/01/09
+    @staticmethod
+    def gen_custom_start_pos(cls, net_params, initial_config, num_vehicles):
+        import time
+
+        
+        VEHICLE_LENGTH = 4.45
+        NO_LEFT_VEHICLE_NUMS = 36
+
+        length = net_params.additional_params['length']
+        num_lane = net_params.additional_params['lanes']
+        min_gap = initial_config.min_gap
+        my_min_gap = min_gap + 28
+        running_start_pos=0
+
+        no_leftside_veh_tuple = []
+        other_veh_tuple = []
+
+
+        startpos, startlane = [], []
+        available_pos_tuple =[]
+
+
+        if length*num_lane < (my_min_gap)*num_vehicles:
+            raise ValueError('num of vehicles are too many')
+
+        edges = ['bottom', 'right', 'top', 'left']
+        edge_length = length // 4
+
+        # 가능한 position 생성 (lane에 상관없이 절대적인 값만)
+        for i in range(math.ceil(num_vehicles/num_lane)):
+            available_pos_tuple.append((edges[int(running_start_pos // edge_length)], running_start_pos%edge_length))
+            running_start_pos+=my_min_gap
+
+        # 추월차선 빼고 일단 채워넣음
+        unplaced_veh = num_vehicles
+        for edge, pos in available_pos_tuple:
+            for lane in range(num_lane-1):
+                now_pos = pos+round(random.uniform(0,my_min_gap/2), 1)
+                if now_pos > edge_length:
+                    real_edge_index = edges.index(edge)
+                    edge = edges[real_edge_index]
+                no_leftside_veh_tuple.append(((edge, now_pos), lane))
+                unplaced_veh-=1
+
+        # 나머지 차량 채워넣음
+        while unplaced_veh!=0:
+            other_veh_tuple.append((available_pos_tuple[unplaced_veh], num_lane-1))
+            unplaced_veh-=1
+
+        #여기서부터는 shuffle을 위한 배치
+
+        random.shuffle(no_leftside_veh_tuple) #추월차선 내에 없는 애들 섞어줌
+        other_veh_tuple
+
+
+        must_keep_lane_veh = copy.deepcopy(no_leftside_veh_tuple[:NO_LEFT_VEHICLE_NUMS]) # 해당 차량은 추월차선에 없어야 하므로 더이상 섞으면 안됨
+        final_other_vehicle = copy.deepcopy(no_leftside_veh_tuple[NO_LEFT_VEHICLE_NUMS:])+other_veh_tuple # 추월차선에 존재해도 되는 차량
+        
+
+        random.shuffle(final_other_vehicle) # 추월차선에 존재해도 되는 차량 한번 더 섞어줌: 현재 추월차선에는 한종류에 차량만 존재하기 때문
+
+        final_tuple = must_keep_lane_veh+final_other_vehicle #하나의 튜플로 통합
+        startpos, startlane = zip(*final_tuple) # startpos, lane으로 분리
+
+        # print(startpos)
+        # print(startlane)
+        # print(len(startlane))
+
+        # time.sleep(200)
+
+        return startpos, startlane

@@ -96,6 +96,10 @@ class BaseController(metaclass=ABCMeta):
         """Return the acceleration of the controller."""
         pass
 
+    def get_accel_pre(self,env):
+
+        pass
+
     def get_action(self, env):
         """Convert the get_accel() acceleration into an action.
 
@@ -130,8 +134,10 @@ class BaseController(metaclass=ABCMeta):
 
         # this allows the acceleration behavior of vehicles in a junction be
         # described by sumo instead of an explicit model
-        if env.k.vehicle.get_edge(self.veh_id)[0] == ":":
-            return None
+
+        #bmil edit 23/01/11 -> 원래 있던 코드 주석 처리
+        # if env.k.vehicle.get_edge(self.veh_id)[0] == ":":
+        #     return None
 
         accel = self.get_accel(env)
 

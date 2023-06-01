@@ -29,22 +29,21 @@ ADDITIONAL_ENV_PARAMS = {
     'sort_vehicles': False
 }
 
-def new_softmax(a) :
-    c = np.max(a) # 최댓값
-    exp_a = np.exp(a-c) # 각각의 원소에 최댓값을 뺀 값에 exp를 취한다. (이를 통해 overflow 방지)
+
+def new_softmax(a):
+    c = np.max(a)  # 최댓값
+    exp_a = np.exp(a - c)  # 각각의 원소에 최댓값을 뺀 값에 exp를 취한다. (이를 통해 overflow 방지)
     sum_exp_a = np.sum(exp_a)
     y = exp_a / sum_exp_a
     return y
 
+
 class LCIAccelEnv(AccelEnv):
     """Fully observable lane change and acceleration environment.
-
     This environment is used to train autonomous vehicles to improve traffic
     flows when lane-change and acceleration actions are permitted by the rl
     agent.
-
     Required from env_params:
-
     * max_accel: maximum acceleration for autonomous vehicles, in m/s^2
     * max_decel: maximum deceleration for autonomous vehicles, in m/s^2
     * lane_change_duration: lane change duration for autonomous vehicles, in s
@@ -53,28 +52,22 @@ class LCIAccelEnv(AccelEnv):
       during a simulation step. If set to True, the environment parameter
       self.sorted_ids will return a list of all vehicles sorted in accordance
       with the environment
-
     States
         The state consists of the velocities, absolute position, and lane index
         of all vehicles in the network. This assumes a constant number of
         vehicles.
-
     Actions
         Actions consist of:
-
         * a (continuous) acceleration from -abs(max_decel) to max_accel,
           specified in env_params
         * a (continuous) lane-change action from -1 to 1, used to determine the
           lateral direction the vehicle will take.
-
         Lane change actions are performed only if the vehicle has not changed
         lanes for the lane change duration specified in env_params.
-
     Rewards
         The reward function is the two-norm of the distance of the speed of the
         vehicles in the network from a desired speed, combined with a penalty
         to discourage excess lane changes by the rl vehicle.
-
     Termination
         A rollout is terminated if the time horizon is reached or if two
         vehicles collide into one another.
@@ -87,17 +80,17 @@ class LCIAccelEnv(AccelEnv):
                     'Environment parameter "{}" not supplied'.format(p))
 
         super().__init__(env_params, sim_params, network, simulator)
-    
+
     @property
     def action_space(self):
         """See class definition."""
         max_decel = self.env_params.additional_params["max_decel"]
         max_accel = self.env_params.additional_params["max_accel"]
 
-        lb = [-abs(max_decel), -1,-1,-1] * self.initial_vehicles.num_rl_vehicles
-        ub = [max_accel, 1.,1.,1.] * self.initial_vehicles.num_rl_vehicles
+        lb = [-abs(max_decel), -1, -1, -1] * self.initial_vehicles.num_rl_vehicles
+        ub = [max_accel, 1., 1., 1.] * self.initial_vehicles.num_rl_vehicles
         # shape = self.initial_vehicles.num_rl_vehicles + 3,
-        return Box(np.array(lb), np.array(ub),  dtype=np.float32)
+        return Box(np.array(lb), np.array(ub), dtype=np.float32)
 
     @property
     def observation_space(self):
@@ -105,7 +98,7 @@ class LCIAccelEnv(AccelEnv):
         return Box(
             low=0,
             high=1,
-            shape=(3 * self.initial_vehicles.num_vehicles, ),
+            shape=(3 * self.initial_vehicles.num_vehicles,),
             dtype=np.float32)
 
     def compute_reward(self, rl_actions, **kwargs):
@@ -119,7 +112,7 @@ class LCIAccelEnv(AccelEnv):
         rl_action_p = self.initial_config.reward_params.get('rl_action_penalty', 0)
         acc_p = self.initial_config.reward_params.get('acc_penalty', 0)
         uns4IDM_p = self.initial_config.reward_params.get('uns4IDM_penalty', 0)
-        mlp = self.initial_config.reward_params.get('meaningless_penalty',0)
+        mlp = self.initial_config.reward_params.get('meaningless_penalty', 0)
 
         rwds = defaultdict(int)
 
@@ -153,7 +146,7 @@ class LCIAccelEnv(AccelEnv):
                     rwds['uns4IDM_penalty'] += pen
 
                 if acc_p:
-                    pen = rewards.punish_accelerations(self,rl_actions)
+                    pen = rewards.punish_accelerations(self, rl_actions)
                     reward += pen
                     rwds['acc_penalty'] += pen
 
@@ -207,8 +200,6 @@ class LCIAccelEnv(AccelEnv):
                for veh_id in self.sorted_ids]
         lane = [self.k.vehicle.get_lane(veh_id) / max_lanes
                 for veh_id in self.sorted_ids]
-
-
 
         return np.array(speed + pos + lane)
 
@@ -280,16 +271,14 @@ class LCIAccelEnv(AccelEnv):
             for veh_id in self.k.vehicle.get_human_ids():
                 self.k.vehicle.set_observed(veh_id)
 
+
 class LCIAccelPOEnv(LCIAccelEnv):
     """POMDP version of LaneChangeAccelEnv.
-
         Required from env_params:
-
         * max_accel: maximum acceleration for autonomous vehicles, in m/s^2
         * max_decel: maximum deceleration for autonomous vehicles, in m/s^2
         * lane_change_duration: lane change duration for autonomous vehicles, in s
         * target_velocity: desired velocity for all vehicles in the network, in m/s
-
     """
 
     def __init__(self, env_params, sim_params, network, simulator='traci'):
@@ -309,7 +298,6 @@ class LCIAccelPOEnv(LCIAccelEnv):
                    (self.num_lanes + 5) + 2,),
             dtype=np.float32)
 
-
     def get_state(self):
         """See class definition."""
         # normalizers
@@ -322,7 +310,6 @@ class LCIAccelPOEnv(LCIAccelEnv):
         # coef
         rl_des = self.initial_config.reward_params.get('rl_desired_speed', 0)
         uns4IDM_p = self.initial_config.reward_params.get('uns4IDM_penalty', 0)
-
 
         # NOTE: this works for only single agent environmnet
         rl = self.k.vehicle.get_rl_ids()[0]
@@ -348,13 +335,12 @@ class LCIAccelPOEnv(LCIAccelEnv):
         #  Normalization of states
         speeds = [speed / max_speed
                   for speed in lane_followers_speed + lane_leaders_speed + rl_speed]
-        positions = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length  #  Relative Postion
+        positions = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length  # Relative Postion
                      for pos in lane_followers_pos + lane_leaders_pos]
         lanes = [lane / max_lanes
                  for lane in follower_lanes + leader_lanes + [self.k.vehicle.get_lane(rl)]]
 
-
-        coef = [rl_des,uns4IDM_p]
+        coef = [rl_des, uns4IDM_p]
 
         observation = np.array(speeds + positions + lanes + coef)
         return observation

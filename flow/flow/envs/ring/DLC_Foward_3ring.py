@@ -206,13 +206,132 @@ class DLCFAccelEnv(AccelEnv):
         self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
         self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction)
 
-    def additional_command(Self):
+    def additional_command(self):
         """Define which vehicles are observed for visualization purposes."""
         # specify observed vehicles
         if self.k.vehicle.num_rl_vehicles > 0:
             for veh_id in self.k.vehicle.get_human_ids():
                 self.k.vehicle.set_observed(veh_id)
 
+
+class DLCF2AccelPOEnv(DLCFAccelEnv):
+    """POMDP version of LaneChangeAccelEnv.
+
+        Required from env_params:
+
+        * max_accel: maximum acceleration for autonomous vehicles, in m/s^2
+        * max_decel: maximum deceleration for autonomous vehicles, in m/s^2
+        * lane_change_duration: lane change duration for autonomous vehicles, in s
+        * target_velocity: desired velocity for all vehicles in the network, in m/s
+    """
+
+    def __init__(self, env_params, sim_params, network, simulator='traci'):
+        super().__init__(env_params, sim_params, network, simulator)
+
+        self.num_lanes = max(self.k.network.num_lanes(edge)
+                             for edge in self.k.network.get_edge_list())
+        self.visible = []
+
+    @property
+    def observation_space(self):
+        """See class definition."""
+        return Box(
+            low=-1,
+            high=1,
+            shape=(3 * 2 * 2 + 2, ),
+            # shape=(2 * self.initial_vehicles.num_rl_vehicles *
+            #        (self.num_lanes + 5) + 2,),
+            dtype=np.float32)
+
+    def get_state(self):
+        """See class definition."""
+        # normalizers
+        max_speed = self.k.network.max_speed()
+        length = self.k.network.length()
+        max_lanes = max(
+            self.k.network.num_lanes(edge)
+            for edge in self.k.network.get_edge_list())
+
+        # NOTE: this works for only single agent environmnet
+        rl = self.k.vehicle.get_rl_ids()[0]
+        lane_followers = self.k.vehicle.get_lane_followers(rl)
+        lane_leaders = self.k.vehicle.get_lane_leaders(rl)
+
+        # Velocity of vehicles
+        lane_followers_speed = self.k.vehicle.get_lane_followers_speed(rl)
+        lane_leaders_speed = self.k.vehicle.get_lane_leaders_speed(rl)
+        rl_speed = self.k.vehicle.get_speed(rl)
+        # for i in rl_speed:
+        if rl_speed / max_speed > 1:
+            rl_speed = 1.
+
+        # Position of Vehicles
+        lane_followers_pos = [self.k.vehicle.get_x_by_id(follower) for follower in lane_followers]
+        lane_leaders_pos = [self.k.vehicle.get_x_by_id(leader) for leader in lane_leaders]
+
+        for i in range(0, max_lanes):
+            # print(max_lanes)
+            if self.k.vehicle.get_lane(rl) == i:
+                lane_followers_speed = lane_followers_speed[max(0, i - 1):i + 2]
+                lane_leaders_speed = lane_leaders_speed[max(0, i - 1):i + 2]
+                lane_leaders_pos = lane_leaders_pos[max(0, i - 1):i + 2]
+                lane_followers_pos = lane_followers_pos[max(0, i - 1):i + 2]
+
+                if i == 0:
+                    f_sp = [(speed - rl_speed) / max_speed
+                            for speed in lane_followers_speed]
+                    f_sp.insert(0, -1.)
+                    l_sp = [(speed - rl_speed) / max_speed
+                            for speed in lane_leaders_speed]
+                    l_sp.insert(0, -1.)
+                    f_pos = [-((self.k.vehicle.get_x_by_id(rl) - pos) % length / length)
+                             for pos in lane_followers_pos]
+                    f_pos.insert(0, -1.)
+                    l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
+                             for pos in lane_leaders_pos]
+                    l_pos.insert(0, -1.)
+                    lanes = [0.]
+
+                elif i == max_lanes - 1:
+                    f_sp = [(speed - rl_speed) / max_speed
+                            for speed in lane_followers_speed]
+                    f_sp.insert(2, -1.)
+                    l_sp = [(speed - rl_speed) / max_speed
+                            for speed in lane_leaders_speed]
+                    l_sp.insert(2, -1.)
+                    f_pos = [-((self.k.vehicle.get_x_by_id(rl) - pos) % length / length)
+                             for pos in lane_leaders_pos] #20211013 이전 lane_leaders_pos
+                    f_pos.insert(2, -1.)
+                    l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
+                             for pos in
+                             lane_leaders_pos]
+                    l_pos.insert(2, -1.)
+                    lanes = [1.]
+
+                else:
+                    f_sp = [(speed - rl_speed) / max_speed
+                            for speed in lane_followers_speed]
+                    l_sp = [(speed - rl_speed) / max_speed
+                            for speed in lane_leaders_speed]
+                    f_pos = [-((self.k.vehicle.get_x_by_id(rl) - pos) % length / length)
+                             for pos in lane_leaders_pos] #20211013 이전 lane_leaders_pos
+                    l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
+                             for pos in lane_leaders_pos]
+                    lanes = [0.5]
+
+                rl_sp = [rl_speed / max_speed]
+                # rl_pos = [self.k.vehicle.get_x_by_id(rl) / length]
+                positions = l_pos + f_pos #+ rl_pos
+                speeds = rl_sp + l_sp + f_sp
+
+        observation = np.array(speeds + positions + lanes)
+        return observation
+
+    def additional_command(self):
+        """Define which vehicles are observed for visualization purposes."""
+        # specify observed vehicles
+        for veh_id in self.visible:
+            self.k.vehicle.set_observed(veh_id)
 
 class DLCFAccelPOEnv(DLCFAccelEnv):
     """POMDP version of LaneChangeAccelEnv.
@@ -300,8 +419,7 @@ class DLCFAccelPOEnv(DLCFAccelEnv):
                             for speed in lane_leaders_speed]
                     l_sp.insert(2, -1.)
                     f_pos = [-((self.k.vehicle.get_x_by_id(rl) - pos) % length / length)
-                             for pos in
-                             lane_leaders_pos]
+                             for pos in lane_followers_pos] #20211013 이전 lane_leaders_pos
                     f_pos.insert(2, -1.)
                     l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
                              for pos in
@@ -315,13 +433,14 @@ class DLCFAccelPOEnv(DLCFAccelEnv):
                     l_sp = [(speed - rl_speed) / max_speed
                             for speed in lane_leaders_speed]
                     f_pos = [-((self.k.vehicle.get_x_by_id(rl) - pos) % length / length)
-                             for pos in lane_leaders_pos]
+                             for pos in lane_followers_pos] #20211013 이전 lane_leaders_pos
                     l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
                              for pos in lane_leaders_pos]
                     lanes = [0.5]
 
                 rl_sp = [rl_speed / max_speed]
-                positions = l_pos + f_pos
+                # rl_pos = [self.k.vehicle.get_x_by_id(rl) / length]
+                positions = l_pos + f_pos #+ rl_pos
                 speeds = rl_sp + l_sp + f_sp
 
         observation = np.array(speeds + positions + lanes)

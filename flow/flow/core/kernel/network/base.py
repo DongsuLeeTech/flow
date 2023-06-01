@@ -246,6 +246,10 @@ class BaseKernelNetwork(object):
         elif initial_config.spacing == 'custom2':
             startpositions, startlanes = self.gen_custom_start_pos2(
                 initial_config, num_vehicles)
+        elif initial_config.spacing == 'custom3':
+            startpositions, startlanes = self.gen_custom_start_pos3(
+                initial_config, num_vehicles)
+        
         else:
             raise FatalFlowError('"spacing" argument in initial_config does '
                                  'not contain a valid option')
@@ -472,9 +476,15 @@ class BaseKernelNetwork(object):
                              (self.edge_length(edge_i) - efs))
 
                 pos_i += efs
-
+            
             startpositions.append((edge_i, pos_i))
             startlanes.append(lane_i)
+
+        #bmil edit 2023/01/02
+        zipped_start = list(zip(startpositions, startlanes))
+        random.shuffle(zipped_start)
+
+        startpositions, startlanes = zip(*zipped_start)
 
         return startpositions, startlanes
 
@@ -524,6 +534,32 @@ class BaseKernelNetwork(object):
             list of start lanes
         """
         return self.network.gen_custom_start_pos2(
+            cls=self,
+            net_params=self.network.net_params,
+            initial_config=initial_config,
+            num_vehicles=num_vehicles,
+        )
+
+    def gen_custom_start_pos3(self, initial_config, num_vehicles):
+        """Generate a user defined set of starting positions.
+
+        This is called straight from the network class.
+
+        Parameters
+        ----------
+        initial_config : flow.core.params.InitialConfig
+            see flow/core/params.py
+        num_vehicles : int
+            number of vehicles to be placed on the network
+
+        Returns
+        -------
+        list of tuple (float, float)
+            list of start positions [(edge0, pos0), (edge1, pos1), ...]
+        list of int
+            list of start lanes
+        """
+        return self.network.gen_custom_start_pos3(
             cls=self,
             net_params=self.network.net_params,
             initial_config=initial_config,

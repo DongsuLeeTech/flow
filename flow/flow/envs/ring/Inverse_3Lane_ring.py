@@ -1,12 +1,15 @@
 from flow.envs.ring.accel import AccelEnv
 from flow.envs.ring.lane_change_accel import LaneChangeAccelEnv
 from flow.core import lane_change_rewards as rewards
+from flow.core.params import InitialConfig
+
 
 from gym.spaces.box import Box
 from gym.spaces.tuple import Tuple
 from gym.spaces.multi_discrete import MultiDiscrete
 
 import numpy as np
+import random
 
 from collections import defaultdict
 from pprint import pprint
@@ -29,7 +32,6 @@ ADDITIONAL_ENV_PARAMS = {
     'sort_vehicles': False
 }
 
-
 class TD3LCIAccelEnv(AccelEnv):
     """Fully observable lane change and acceleration environment.
 
@@ -38,7 +40,8 @@ class TD3LCIAccelEnv(AccelEnv):
     agent.
 
     """
-
+    coef_log = []
+        
     def __init__(self, env_params, sim_params, network, simulator='traci'):
         for p in ADDITIONAL_ENV_PARAMS.keys():
             if p not in env_params.additional_params:
@@ -67,70 +70,124 @@ class TD3LCIAccelEnv(AccelEnv):
             shape=(3 * self.initial_vehicles.num_vehicles,),
             dtype=np.float32)
 
+
+    def Coef(self):
+        global coef_log
+        np.set_printoptions(precision=4)
+        if self.time_counter == 0:
+            coef_log = []
+            rl_des = random.sample([i for i in np.arange(1, 2, 0.1)], 1)[-1]
+            uns4IDM_p = random.sample([i for i in np.arange(0, 1.0, 0.1)], 1)[-1]
+            mlp = random.sample([i for i in np.arange(0, 1.0, 0.1)], 1)[-1]
+
+            coef_log.append([rl_des, uns4IDM_p, mlp])
+
+        else:
+            rl_des = coef_log[0][0]
+            uns4IDM_p = coef_log[0][1]
+            mlp = coef_log[0][2]
+
+        return rl_des, uns4IDM_p, mlp
+            
     def compute_reward(self, rl_actions, **kwargs):
         rls = self.k.vehicle.get_rl_ids()
         reward = 0
 
+        # # Training
+        # rl_des, uns4IDM_p, mlp = self.Coef()
+        # # print('compute_reward:{},{},{}'.format(rl_des, uns4IDM_p, mlp))
+
+        #  Execution
         rl_des = self.initial_config.reward_params.get('rl_desired_speed', 0)
-        simple_lc_p = self.initial_config.reward_params.get('simple_lc_penalty', 0)
-        unsafe_p = self.initial_config.reward_params.get('unsafe_penalty', 0)
-        dc3_p = self.initial_config.reward_params.get('dc3_penalty', 0)
-        rl_action_p = self.initial_config.reward_params.get('rl_action_penalty', 0)
-        acc_p = self.initial_config.reward_params.get('acc_penalty', 0)
         uns4IDM_p = self.initial_config.reward_params.get('uns4IDM_penalty', 0)
         mlp = self.initial_config.reward_params.get('meaningless_penalty', 0)
+
+        rl_action_p = self.initial_config.reward_params.get('rl_action_penalty', 0)
 
         rwds = defaultdict(int)
 
         for rl in rls:
-            # 바로 아랫 줄을 제거하거나 exponent 로 바꾸는 편 좋을듯.
             if rl_des:
                 if self.k.vehicle.get_speed(rl) > 0.:
-                    r = rewards.rl_desired_speed(self)
+                    vel = np.array(self.k.vehicle.get_speed(self.k.vehicle.get_rl_ids()))
+
+                    if rl_des == 0:
+                        return 0
+
+                    if any(vel < -100):
+                        return 0.
+                    if len(vel) == 0:
+                        return 0.
+
+                    vel = np.array(self.k.vehicle.get_speed(rls))
+                    num_vehicles = len(rls)
+
+                    target_vel = self.env_params.additional_params['target_velocity']
+                    max_cost = np.array([target_vel] * num_vehicles)
+                    max_cost = np.linalg.norm(max_cost)
+
+                    cost = vel - target_vel
+                    cost = np.linalg.norm(cost)
+
+                    # epsilon term (to deal with ZeroDivisionError exceptions)
+                    eps = np.finfo(np.float32).eps
+
+                    r = rl_des * (1 - (cost / (max_cost + eps)))
                     reward += r
                     rwds['rl_desired_speed'] += r
-                else:
-                    return 0.
-
-            if simple_lc_p and self.time_counter == self.k.vehicle.get_last_lc(rl):
-                reward -= simple_lc_p
-                rwds['simple_lc_penalty'] -= simple_lc_p
 
             follower = self.k.vehicle.get_follower(rl)
             leader = self.k.vehicle.get_leader(rl)
-            # 수정 필요
+
             if leader is not None:
                 if mlp:
-                    pen = rewards.meaningless_penalty(self)
+                    pen = 0
+                    if mlp:
+                        for veh_id in self.k.vehicle.get_rl_ids():
+                            if self.k.vehicle.get_last_lc(veh_id) == self.time_counter:
+                                lane_leaders = self.k.vehicle.get_lane_leaders(veh_id)
+                                headway = [(self.k.vehicle.get_x_by_id(leader) - self.k.vehicle.get_x_by_id(veh_id))
+                                           % self.k.network.length() / self.k.network.length() for leader in lane_leaders]
+                                # FOR N LANE
+                                if headway[self.k.vehicle.get_previous_lane(veh_id)] - headway[
+                                    self.k.vehicle.get_lane(veh_id)] > 5:
+                                    pen -= mlp * (headway[self.k.vehicle.get_previous_lane(veh_id)])
+
                     reward += pen
                     rwds['meaningless_penalty'] += pen
 
             if follower is not None:
                 if uns4IDM_p:
-                    pen = rewards.unsafe_distance_penalty4IDM(self)
+                    T = 1
+                    a = 1
+                    b = 1
+                    s0 = 2
+
+                    v = self.k.vehicle.get_speed(rls)[0]
+                    tw = self.k.vehicle.get_tailway(rls)[0]
+                    follow_id = self.k.vehicle.get_follower(rls)[0]
+
+                    if abs(tw) < 1e-3:
+                        tw = 1e-3
+
+                    if follow_id is None or follow_id == '':
+                        s_star = 0
+
+                    else:
+                        follow_vel = self.k.vehicle.get_speed(follow_id)
+                        s_star = s0 + max(
+                            0, follow_vel * T + follow_vel * (follow_vel - v) /
+                               (2 * np.sqrt(a * b)))
+
+                    pen = uns4IDM_p * max(-5, min(0, 1 - (s_star / tw) ** 2))
                     reward += pen
                     rwds['uns4IDM_penalty'] += pen
-
-                if acc_p:
-                    pen = rewards.punish_accelerations(self, rl_actions)
-                    reward += pen
-                    rwds['acc_penalty'] += pen
-
-                if unsafe_p:
-                    pen = rewards.unsafe_distance_penalty(self)
-                    reward += pen
-                    rwds['unsafe_penalty'] += pen
-
-                if dc3_p:
-                    pen = rewards.follower_decel_penalty(self)
-                    reward += pen
-                    rwds['dc3_penalty'] += pen
 
             if rl_action_p:
                 pen = rewards.rl_action_penalty(self, rl_actions)
                 reward += pen
                 rwds['rl_action_penalty'] += pen
-        # print(rwds)
+
         rwd = sum(rwds.values())
         # if rwd :
         #     print('accumulative reward is negative:{}\nelements of reward:{}'.format(rwd,rwds))
@@ -173,19 +230,6 @@ class TD3LCIAccelEnv(AccelEnv):
 
         return np.array(speed + pos + lane)
 
-    # def _to_lc_action(self, rl_action):
-    #     """Make direction components of rl_action to discrete"""
-    #     if rl_action is None:
-    #         return rl_action
-    #     for i in range(1, len(rl_action), 2):
-    #         if rl_action[i] <= -0.333:
-    #             rl_action[i] = -1
-    #         elif rl_action[i] >= 0.333:
-    #             rl_action[i] = 1
-    #         else:
-    #             rl_action[i] = 0
-    #     return rl_action
-
     def _apply_rl_actions(self, actions):
         # actions = self._to_lc_action(actions)
         acceleration = actions[::2]
@@ -219,7 +263,7 @@ class TD3LCIAccelEnv(AccelEnv):
         self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
         self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction)
 
-    def additional_command(Self):
+    def additional_command(self):
         """Define which vehicles are observed for visualization purposes."""
         # specify observed vehicles
         if self.k.vehicle.num_rl_vehicles > 0:
@@ -253,8 +297,6 @@ class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
             low=-1,
             high=1,
             shape=(3 * 2 * 2 + 2 + 3, ),
-            # shape=(2 * self.initial_vehicles.num_rl_vehicles *
-            #        (self.num_lanes + 5) + 2,),
             dtype=np.float32)
 
     def get_state(self):
@@ -266,7 +308,11 @@ class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
             self.k.network.num_lanes(edge)
             for edge in self.k.network.get_edge_list())
 
-        # coef
+        # # Training random coef
+        # rl_des, uns4IDM_p, mlp = self.Coef()
+        # # print('get_state:{},{},{}'.format(rl_des, uns4IDM_p, mlp))
+
+        #  Execution
         rl_des = self.initial_config.reward_params.get('rl_desired_speed', 0)
         uns4IDM_p = self.initial_config.reward_params.get('uns4IDM_penalty', 0)
         mlp = self.initial_config.reward_params.get('meaningless_penalty', 0)
@@ -289,7 +335,7 @@ class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
         lane_leaders_pos = [self.k.vehicle.get_x_by_id(leader) for leader in lane_leaders]
 
         for i in range(0, max_lanes):
-            
+            # print(max_lanes)
             if self.k.vehicle.get_lane(rl) == i:
                 lane_followers_speed = lane_followers_speed[max(0, i - 1):i + 2]
                 lane_leaders_speed = lane_leaders_speed[max(0, i - 1):i + 2]
@@ -308,10 +354,10 @@ class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
                     f_pos.insert(0, -1.)
                     l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
                              for pos in lane_leaders_pos]
-                    l_pos.insert(0, -1.)
-                    lanes = [-1.]
+                    l_pos.insert(0, +1.)
+                    lanes = [0.]
 
-                elif i == max_lanes-1:
+                elif i == max_lanes - 1:
                     f_sp = [(speed - rl_speed) / max_speed
                             for speed in lane_followers_speed]
                     f_sp.insert(2, -1.)
@@ -319,13 +365,11 @@ class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
                             for speed in lane_leaders_speed]
                     l_sp.insert(2, -1.)
                     f_pos = [-((self.k.vehicle.get_x_by_id(rl) - pos) % length / length)
-                             for pos in
-                             lane_leaders_pos]
+                             for pos in lane_followers_pos]
                     f_pos.insert(2, -1.)
                     l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
-                             for pos in
-                             lane_leaders_pos]
-                    l_pos.insert(2, -1.)
+                             for pos in lane_leaders_pos]
+                    l_pos.insert(2, +1.)
                     lanes = [1.]
 
                 else:
@@ -334,17 +378,19 @@ class TD3LCIAccelPOEnv(TD3LCIAccelEnv):
                     l_sp = [(speed - rl_speed) / max_speed
                             for speed in lane_leaders_speed]
                     f_pos = [-((self.k.vehicle.get_x_by_id(rl) - pos) % length / length)
-                             for pos in lane_leaders_pos]
+                             for pos in lane_followers_pos]
                     l_pos = [(pos - self.k.vehicle.get_x_by_id(rl)) % length / length
                              for pos in lane_leaders_pos]
-                    lanes = [0]
+                    lanes = [0.5]
 
-        rl_sp = [rl_speed / max_speed]
-        positions = l_pos + f_pos
-        speeds = rl_sp + l_sp + f_sp
-        coef = [i / 2 for i in [rl_des, uns4IDM_p, mlp]]
+                rl_sp = [rl_speed / max_speed]
+                positions = l_pos + f_pos
+                speeds = rl_sp + l_sp + f_sp
 
+        # Coef scailing
+        coef = [i / 3 for i in [rl_des, uns4IDM_p, mlp]]
         observation = np.array(speeds + positions + lanes + coef)
+
         return observation
 
     def additional_command(self):

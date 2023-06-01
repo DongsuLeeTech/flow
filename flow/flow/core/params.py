@@ -262,7 +262,8 @@ class VehicleParams:
             num_vehicles=0,
             car_following_params=None,
             lane_change_params=None,
-            color=None):
+            color=None,
+            length=5):
         """Add a sequence of vehicles to the list of vehicles in the network.
 
         Parameters
@@ -317,6 +318,10 @@ class VehicleParams:
             type_params['color'] = color
             self.type_parameters[veh_id]['color'] = color
 
+        if length:
+            type_params['length'] = length
+            self.type_parameters[veh_id]['length'] = length
+            
         # TODO: delete?
         self.initial.append({
             "veh_id":
@@ -1038,6 +1043,7 @@ class SumoLaneChangeParams:
                  **kwargs):
         """Instantiate SumoLaneChangeParams."""
         # check for deprecations (lcStrategic)
+
         if "lcStrategic" in kwargs:
             deprecated_attribute(self, "lcStrategic", "lc_strategic")
             lc_strategic = kwargs["lcStrategic"]
@@ -1099,14 +1105,22 @@ class SumoLaneChangeParams:
             model = "LC2013"
 
         if model == "LC2013":
+            #bmil edit 01/11
+            
+            # print(model, lc_strategic, lc_cooperative, lc_speed_gain, lc_keep_right)
             self.controller_params = {
                 "laneChangeModel": model,
                 "lcStrategic": str(lc_strategic),
                 "lcCooperative": str(lc_cooperative),
                 "lcSpeedGain": str(lc_speed_gain),
                 "lcKeepRight": str(lc_keep_right),
-                # "lcLookaheadLeft": str(lc_look_ahead_left),
-                # "lcSpeedGainRight": str(lcSpeedGainRight)
+
+                #bmil edit -> 원래 주석이던거 풀었음
+                "lcLookaheadLeft": str(lc_look_ahead_left),
+                "lcSpeedGainRight": str(lc_speed_gain_right),
+                
+                #bmil edit -> 추가
+                "lcAssertive": str(lc_assertive),
             }
         elif model == "SL2015":
             self.controller_params = {

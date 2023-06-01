@@ -54,6 +54,7 @@ class MultiWaveAttenuationPOEnv(MultiEnv):
         See parent class
     """
 
+
     @property
     def observation_space(self):
         """See class definition."""

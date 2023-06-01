@@ -5,7 +5,6 @@ from flow.core.params import InitialConfig
 from flow.core.params import TrafficLightParams
 from numpy import pi, sin, cos, linspace
 import numpy as np
-import random
 
 ADDITIONAL_NET_PARAMS = {
     # length of the ring road
@@ -219,7 +218,7 @@ class RingNetwork(Network):
 
     @staticmethod
     def gen_custom_start_pos(cls, net_params, initial_config, num_vehicles):
-        VEHICLE_LENGTH = 5
+        VEHICLE_LENGTH: int = 5
 
         length = net_params.additional_params['length']
         num_lane = net_params.additional_params['lanes']
@@ -265,7 +264,7 @@ class RingNetwork(Network):
         min_gap = initial_config.min_gap
         my_min_gap = min_gap + 20
         startpos, startlane = [], []
-        if length < (num_vehicles / num_lane) * (VEHICLE_LENGTH + my_min_gap) :
+        if length < (num_vehicles / num_lane) * (VEHICLE_LENGTH + my_min_gap):
             raise ValueError('num of vehicles are too many')
 
         surplus_gap = length - num_vehicles * (VEHICLE_LENGTH + my_min_gap)
@@ -276,21 +275,50 @@ class RingNetwork(Network):
         edge_length = length // 4
 
         # startpos.append((edges[0], 0))
+        # startlane.append(0)
 
         lane_index = list(range(0, num_lane, 3)) + list(range(1, num_lane, 3)) + list(range(2, num_lane, 3))
-        startlane += [lane_index[i % len(lane_index)] for i in range(num_vehicles-1)]
+        startlane += [lane_index[i % len(lane_index)] for i in range(num_vehicles - 1)]
 
         pos = 0
-        for veh in range(num_vehicles-1):
+        pos_list = []
+        for veh in range(num_vehicles):
             if veh % 2 == 1:
-                pos = pos + 1.3*(my_min_gap + VEHICLE_LENGTH)
+                pos = pos + 3.2 * (my_min_gap + VEHICLE_LENGTH)
+
             if veh % 2 == 0:
                 pos = pos
 
+            pos_list.append(pos)
             startpos.append((edges[int(pos // edge_length)], pos % edge_length))
-        # the AV random generator
-        rl_pos = random.randrange(16, length, 32)
-        startpos.append((edges[int(rl_pos // edge_length)], rl_pos % edge_length))
-        startlane.append(random.choice([0, 1, 2]))
+        # # the AV random generator
+        # rl_pos = random.randrange(0, length)
+        # rl_pos = random.randrange(16, length, 32)
+
+        # lane_list = []
+        # for i in range(num_vehicles-1):
+        #     if startlane[i] == startlane[-1]:
+        #         lane_list.append(i)
+        #
+        # if rl_pos in lane_list:
+        #     rl_pos = random.randrange(0, length)
+        # startpos.append((edges[int(rl_pos // edge_length)], rl_pos % edge_length))
+        # startpos.append(startpos[0])
+        # startlane.append(random.choice([0, 1, 2]))
+        startlane.append(0)
+
+        # # the AV uniform generator (equal gap)
+        # startlane_dlist = startlane[1::2]
+        # startpos_dlist = startpos[1::2]
+        #
+        # # startlane_dlist[2] = 1
+        #
+        # del startlane[1::2]
+        # del startpos[1::2]
+        #
+        # for i in startlane_dlist:
+        #     startlane.insert(-1, i)#int(num_vehicles) - len(startlane_dlist) - 1, i)
+        # for i in startpos_dlist:
+        #     startpos.insert(-1, i)#int(num_vehicles) - len(startpos_dlist) - 1, i)
 
         return startpos, startlane
